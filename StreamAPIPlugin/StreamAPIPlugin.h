@@ -29,6 +29,7 @@ const std::string LOADOUT_CHANGED_EVENT = "Function TAGame.CarMeshComponent_TA.S
 const std::string SENS_CHANGED_EVENT = "Function TAGame.GFxData_Controls_TA.HandleActiveBindingsChanged";
 const std::string CAMERA_CHANGED_EVENT = "Function TAGame.GFxData_Settings_TA.OnCameraOptionChanged";
 const std::string BINDINGS_CHANGED_EVENT = "Function TAGame.PlayerInput_Menu_TA.OnActiveBindingsChanged";
+const std::string CUSTOM_TRAINING_LOADED_EVENT = "Function TAGame.GameEvent_TrainingEditor_TA.StartPlayTest";
 
 // Should probably just hook on UserSetting change for all but loadout...
 const std::string VIDEO_CHANGED_EVENTS[] = {
@@ -71,7 +72,7 @@ private:
 	std::string controllerBindingsStr;
 	std::string kbmBindingsStr;
 	std::string videoStr;
-	std::string trainingPackStr;
+	std::string trainingPackStr = "No training pack";
 
 private:
 	void onDump(std::vector<std::string> params);

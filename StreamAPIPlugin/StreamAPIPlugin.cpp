@@ -85,6 +85,7 @@ void StreamAPIPlugin::onLoad()
 	for (auto evt : VIDEO_CHANGED_EVENTS) {
 		gameWrapper->HookEventPost(evt, [this](string eventName) { cvarManager->log(eventName); getVideo(); });
 	}
+	gameWrapper->HookEventPost(CUSTOM_TRAINING_LOADED_EVENT, [this](string eventName) { getTrainingPack();  });
 
 	commandNameToCommand["loadout"] = std::bind(&StreamAPIPlugin::loadoutCommand, this, std::placeholders::_1);
 	commandNameToCommand["sens"] = std::bind(&StreamAPIPlugin::sensCommand, this, std::placeholders::_1);
@@ -188,11 +189,51 @@ void StreamAPIPlugin::getBindings()
 
 void StreamAPIPlugin::getTrainingPack()
 {
-	cvarManager->log("Updating training pack");
+	gameWrapper->SetTimeout([this](GameWrapper* gw) {
+		// It seems this data is more reliably available if we wait a second
+		if (!gw->IsInCustomTraining()) {
+			return;
+		}
 
-	if (!gameWrapper->IsInCustomTraining()) return;
+		auto te = TrainingEditorWrapper(gw->GetGameEventAsServer().memory_address);
+		if (te.IsNull()) {
+			return;
+		}
 
+		auto td = te.GetTrainingData();
+		/*if (td.GetbUnowned() != 1) {
+			return;
+		}*/
 
+		auto tdd = td.GetTrainingData();
+
+		auto code = tdd.GetCode();
+		if (code.IsNull()) {
+			cvarManager->log("code is null");
+			return;
+		}
+
+		auto description = tdd.GetTM_Name();
+		if (description.IsNull()) {
+			cvarManager->log("description is null");
+			return;
+		}
+
+		auto creator = tdd.GetCreatorName();
+		if (creator.IsNull()) {
+			cvarManager->log("creator is null");
+			return;
+		}
+
+		cvarManager->log("Updating training pack");
+		stringstream oss;
+		oss << description.ToString() << " by "
+			<< creator.ToString() << " ("
+			<< to_string(te.GetTotalRounds())
+			<< " drills): " << code.ToString();
+		trainingPackStr = oss.str();
+
+		}, 1.0f);
 }
 
 void StreamAPIPlugin::onDump(vector<string> params)
