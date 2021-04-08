@@ -62,6 +62,7 @@ private:
 	void getCamera();
 	void getBindings();
 	void getVideo();
+	void getTrainingPack();
 
 	int previewTeamNum = 0;
 	Loadout loadout;
@@ -70,6 +71,7 @@ private:
 	std::string controllerBindingsStr;
 	std::string kbmBindingsStr;
 	std::string videoStr;
+	std::string trainingPackStr;
 
 private:
 	void onDump(std::vector<std::string> params);
@@ -89,6 +91,7 @@ private:
 	std::string cameraCommand(std::string args);
 	std::string bindingsCommand(std::string args);
 	std::string videoCommand(std::string args);
+	std::string trainingCommand(std::string args);
 
 	std::map<std::string, std::function<std::string(std::string args)> > commandNameToCommand;
 

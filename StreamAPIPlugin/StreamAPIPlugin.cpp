@@ -76,6 +76,7 @@ void StreamAPIPlugin::onLoad()
 	getCamera();
 	getBindings();
 	getVideo();
+	getTrainingPack();
 
 	gameWrapper->HookEventPost(LOADOUT_CHANGED_EVENT, [this](string eventName) { getLoadout(); });
 	gameWrapper->HookEventPost(SENS_CHANGED_EVENT, [this](string eventName) { getSens(); });
@@ -90,6 +91,7 @@ void StreamAPIPlugin::onLoad()
 	commandNameToCommand["camera"] = std::bind(&StreamAPIPlugin::cameraCommand, this, std::placeholders::_1);
 	commandNameToCommand["bindings"] = std::bind(&StreamAPIPlugin::bindingsCommand, this, std::placeholders::_1);
 	commandNameToCommand["video"] = std::bind(&StreamAPIPlugin::videoCommand, this, std::placeholders::_1);
+	commandNameToCommand["training"] = std::bind(&StreamAPIPlugin::trainingCommand, this, std::placeholders::_1);
 }
 
 void StreamAPIPlugin::onUnload()
@@ -184,6 +186,15 @@ void StreamAPIPlugin::getBindings()
 	controllerBindingsStr = oss.str();
 }
 
+void StreamAPIPlugin::getTrainingPack()
+{
+	cvarManager->log("Updating training pack");
+
+	if (!gameWrapper->IsInCustomTraining()) return;
+
+
+}
+
 void StreamAPIPlugin::onDump(vector<string> params)
 {
 	getLoadout();
@@ -256,4 +267,9 @@ std::string StreamAPIPlugin::bindingsCommand(std::string args)
 std::string StreamAPIPlugin::videoCommand(std::string args)
 {
 	return videoStr;
+}
+
+std::string StreamAPIPlugin::trainingCommand(std::string args)
+{
+	return trainingPackStr;
 }
