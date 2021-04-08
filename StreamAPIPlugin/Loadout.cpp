@@ -1,0 +1,643 @@
+#include "Loadout.h"
+#include "StreamAPIPlugin.h"
+#include "BMLoadoutLib/helper_classes.h"
+
+#include <bakkesmod/wrappers/PluginManagerWrapper.h>
+#include <iomanip>
+
+
+#define APPEND_STRING_WITH_ITEM(oss, separator, showSlotName, slotName, itemString) { \
+	oss << separator; \
+	if (showSlotName) oss << slotName << ": "; \
+	oss << itemString; \
+}
+
+#define ASSIGN_ITEM_TO_SLOT(id, loadoutSlot, isOnline, gameWrapper) \
+	if (id != 0 && (isOnline || loadoutSlot.productId == 0)) \
+		loadoutSlot.fromItem(id, isOnline, gameWrapper);
+
+using namespace std;
+
+std::string productNameFromID(int id, std::shared_ptr<GameWrapper> gw)
+{
+	if (id == 0) return "None";
+	return gw->GetItemsWrapper().GetProduct(id).GetAsciiLabel().ToString();
+}
+
+std::string paintNameFromPaintID(int paintId, bool isPrimary)
+{
+	int rowLength = isPrimary ? 10 : 15;
+	return "Row: " + to_string((paintId / rowLength) + 1) + ", Col: " + to_string((paintId % rowLength) + 1);
+}
+
+std::map<uint8_t, BM::Item> read_items_from_buffer(BitBinaryReader<unsigned char>& reader)
+{
+	std::map<uint8_t, BM::Item> items;
+	int itemsSize = reader.ReadBits<int>(4); //Read the length of the item array
+	for (int i = 0; i < itemsSize; i++)
+	{
+		BM::Item option;
+		int slotIndex = reader.ReadBits<int>(5); //Read slot of item
+		int productId = reader.ReadBits<int>(13); //Read product ID
+		bool isPaintable = reader.ReadBool(); //Read whether item is paintable or not
+
+		if (isPaintable)
+		{
+			int paintID = reader.ReadBits<int>(6); //Read paint index
+			option.paint_index = paintID;
+		}
+		option.product_id = productId;
+		option.slot_index = slotIndex;
+		items.insert_or_assign(slotIndex, option); //Add item to loadout at its selected slot
+	}
+	return items;
+}
+
+BM::RGB read_colors_from_buffer(BitBinaryReader<unsigned char>& reader)
+{
+	BM::RGB col;
+	col.r = reader.ReadBits<uint8_t>(8);
+	col.g = reader.ReadBits<uint8_t>(8);
+	col.b = reader.ReadBits<uint8_t>(8);
+	return col;
+}
+
+void Loadout::fromBakkesMod(int teamNum, std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw)
+{
+	if (cv->getCvar("cl_itemmod_enabled").getBoolValue()) {
+		string code = cv->getCvar("cl_itemmod_code").getStringValue();
+
+		BitBinaryReader<unsigned char> reader(code);
+		BM::BMLoadout bmloadout;
+
+		bmloadout.header.version = reader.ReadBits<uint8_t>(6);
+		bmloadout.header.code_size = reader.ReadBits<uint16_t>(10);
+		bmloadout.header.crc = reader.ReadBits<uint8_t>(8);
+
+		/*
+		Calculate whether code_size converted to base64 is actually equal to the given input string
+		Mostly done so we don't end up with invalid buffers, but this step is not required.
+		*/
+		int stringSizeCalc = ((int)ceil((4 * (float)bmloadout.header.code_size / 3)) + 3) & ~3;
+		int stringSize = code.size();
+
+		if (abs(stringSizeCalc - stringSize) > 6) //Diff may be at most 4 (?) because of base64 padding, but we check > 6 because IDK
+		{
+			//Given input string is probably invalid, handle
+			_globalCvarManager->log("Invalid cl_itemmod_code detected");
+			return;
+		}
+
+		/*
+		Verify CRC, aka check if user didn't mess with the input string to create invalid loadouts
+		*/
+		if (!reader.VerifyCRC(bmloadout.header.crc, 3, bmloadout.header.code_size))
+		{
+			//User changed characters in input string, items isn't valid! handle here
+			_globalCvarManager->log("Invalid input string! CRC check failed");
+			return;
+		}
+
+		bmloadout.body.blue_is_orange = reader.ReadBool(); //Read single bit indicating whether blue = orange
+		bmloadout.body.blue_loadout = read_items_from_buffer(reader); //Read loadout
+
+		bmloadout.body.blueColor.should_override = reader.ReadBool(); //Read whether custom colors is on
+		if (bmloadout.body.blueColor.should_override) {
+			bmloadout.body.blueColor.primary_colors = read_colors_from_buffer(reader);
+			bmloadout.body.blueColor.secondary_colors = read_colors_from_buffer(reader);
+
+			if (bmloadout.header.version > 2) {
+				bmloadout.body.blue_wheel_team_id = reader.ReadBits<int>(6);
+			}
+		}
+
+		if (bmloadout.body.blue_is_orange) //User has same loadout for both teams
+		{
+			bmloadout.body.orange_loadout = bmloadout.body.blue_loadout;
+			bmloadout.body.orange_wheel_team_id = bmloadout.body.blue_wheel_team_id;
+		}
+		else {
+			bmloadout.body.orange_loadout = read_items_from_buffer(reader);
+			bmloadout.body.orangeColor.should_override = reader.ReadBool(); //Read whether custom colors is on
+			if (bmloadout.body.blueColor.should_override) {
+				bmloadout.body.orangeColor.primary_colors = read_colors_from_buffer(reader);
+				bmloadout.body.orangeColor.secondary_colors = read_colors_from_buffer(reader);
+			}
+
+			if (bmloadout.header.version > 2) {
+				bmloadout.body.orange_wheel_team_id = reader.ReadBits<int>(6);
+			}
+		}
+
+		// Loadout parsed from code, now apply to this
+
+		auto items = (teamNum == 0 ? bmloadout.body.blue_loadout : bmloadout.body.orange_loadout);
+
+		this->body.fromBMItem(items[BM::SLOT_BODY], gw);
+		this->decal.fromBMItem(items[BM::SLOT_SKIN], gw);
+		this->wheels.fromBMItem(items[BM::SLOT_WHEELS], gw);
+		this->boost.fromBMItem(items[BM::SLOT_BOOST], gw);
+		this->antenna.fromBMItem(items[BM::SLOT_ANTENNA], gw);
+		this->topper.fromBMItem(items[BM::SLOT_HAT], gw);
+		this->primaryFinish.fromBMItem(items[BM::SLOT_PAINTFINISH], gw);
+		this->accentFinish.fromBMItem(items[BM::SLOT_PAINTFINISH_SECONDARY], gw);
+		this->engineAudio.fromBMItem(items[BM::SLOT_ENGINE_AUDIO], gw);
+		this->trail.fromBMItem(items[BM::SLOT_SUPERSONIC_TRAIL], gw);
+		this->goalExplosion.fromBMItem(items[BM::SLOT_GOALEXPLOSION], gw);
+
+		auto teamWheelId = (teamNum == 0 ? bmloadout.body.blue_wheel_team_id : bmloadout.body.orange_wheel_team_id);
+		if (teamWheelId > 0) this->wheels.addTeamId(teamWheelId, gw);
+
+		this->primaryPaint.fromBMPaint((teamNum == 0 ? bmloadout.body.blueColor.primary_colors : bmloadout.body.orangeColor.primary_colors));
+		this->accentPaint.fromBMPaint((teamNum == 0 ? bmloadout.body.blueColor.secondary_colors : bmloadout.body.orangeColor.secondary_colors));
+	}
+}
+
+void Loadout::fromPlugins(int teamNum, std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw)
+{
+	bool rainbowPluginLoaded = false;
+	bool alphaConsoleLoaded = false;
+
+	auto loadedPlugins = gw->GetPluginManager().GetLoadedPlugins();
+	for (auto it = loadedPlugins->begin(); it != loadedPlugins->end(); ++it) {
+		auto pName = string((*it)->_details->pluginName);
+		if (pName.compare("AlphaConsole Plugin") == 0) {
+			// TODO: How do we determine AC is up to date and actually doing something?
+			alphaConsoleLoaded = true;
+		}
+		else if (pName.compare("Rainbow car") == 0) {
+			rainbowPluginLoaded = true;
+		}
+	}
+
+	if (rainbowPluginLoaded) {
+		this->primaryPaint.fromRainbowPlugin(cv, true);
+		this->accentPaint.fromRainbowPlugin(cv, false);
+	}
+
+	if (alphaConsoleLoaded) {
+		this->antenna.fromAlphaConsolePlugin(cv, teamNum, "antenna");
+		this->boost.fromAlphaConsolePlugin(cv, teamNum, "boost");
+		this->wheels.fromAlphaConsolePlugin(cv, teamNum, "wheel");
+		this->decal.fromAlphaConsolePlugin(cv, teamNum, "decal");
+		this->topper.fromAlphaConsolePlugin(cv, teamNum, "topper");
+	}
+}
+
+std::string Loadout::toBMCode()
+{
+	BM::BMLoadout bmLoadout;
+
+	// TODO: Store orange and blue sides and update this to handle both, or do a loadout for each, but combine them both here.
+
+	bmLoadout.body.blue_is_orange = true; // We only have one side of the preset for now, so just apply it to both sides.
+	bmLoadout.body.blueColor.should_override = true; // We can't set the in game paint color, so we'll use the RGB for all cases.
+
+	// Do paints
+	if (primaryPaint.type == BAKKESMOD) { // Assuming accent and primary are BAKKESMOD types, since you currently can't enable/disable them independently.
+		bmLoadout.body.blueColor.primary_colors = { primaryPaint.r, primaryPaint.g, primaryPaint.b };
+		bmLoadout.body.blueColor.secondary_colors = { accentPaint.r, accentPaint.g, accentPaint.b };
+	}
+
+	// Now add the items (slot_index, product_id, paint_index)
+	bmLoadout.body.blue_loadout.insert_or_assign(
+		BM::SLOT_BODY,
+		BM::Item{ BM::SLOT_BODY, (uint16_t)this->body.productId, this->body.paintId });
+	bmLoadout.body.blue_loadout.insert_or_assign(
+		BM::SLOT_SKIN,
+		BM::Item{ BM::SLOT_SKIN, (uint16_t)this->decal.productId, this->decal.paintId });
+	bmLoadout.body.blue_loadout.insert_or_assign(
+		BM::SLOT_WHEELS,
+		BM::Item{ BM::SLOT_WHEELS, (uint16_t)this->wheels.productId, this->wheels.paintId });
+	bmLoadout.body.blue_loadout.insert_or_assign(
+		BM::SLOT_BOOST,
+		BM::Item{ BM::SLOT_BOOST, (uint16_t)this->boost.productId, this->boost.paintId });
+	bmLoadout.body.blue_loadout.insert_or_assign(
+		BM::SLOT_ANTENNA,
+		BM::Item{ BM::SLOT_ANTENNA, (uint16_t)this->antenna.productId, this->antenna.paintId });
+	bmLoadout.body.blue_loadout.insert_or_assign(
+		BM::SLOT_HAT,
+		BM::Item{ BM::SLOT_HAT, (uint16_t)this->topper.productId, this->topper.paintId });
+	bmLoadout.body.blue_loadout.insert_or_assign(
+		BM::SLOT_SUPERSONIC_TRAIL,
+		BM::Item{ BM::SLOT_SUPERSONIC_TRAIL, (uint16_t)this->trail.productId, this->trail.paintId });
+	bmLoadout.body.blue_loadout.insert_or_assign(
+		BM::SLOT_GOALEXPLOSION,
+		BM::Item{ BM::SLOT_GOALEXPLOSION, (uint16_t)this->goalExplosion.productId, this->goalExplosion.paintId });
+	bmLoadout.body.blue_loadout.insert_or_assign(
+		BM::SLOT_PAINTFINISH,
+		BM::Item{ BM::SLOT_PAINTFINISH, (uint16_t)this->primaryFinish.productId, this->primaryFinish.paintId });
+	bmLoadout.body.blue_loadout.insert_or_assign(
+		BM::SLOT_PAINTFINISH_SECONDARY,
+		BM::Item{ BM::SLOT_PAINTFINISH_SECONDARY, (uint16_t)this->accentFinish.productId, this->accentFinish.paintId });
+	bmLoadout.body.blue_wheel_team_id = this->wheels.teamId;
+
+	return save(bmLoadout);
+}
+
+std::string Loadout::toString()
+{
+	stringstream oss;
+	oss << "Loadout:\n"
+		<< "\tBody: " << body.toString() << endl
+		<< "\tPrimary: Paint: " << primaryPaint.toString(true) << ", Finish: " << primaryFinish.toString() << endl
+		<< "\tAccent: Paint: " << accentPaint.toString(false) << ", Finish: " << accentFinish.toString() << endl
+		<< "\tDecal: " << decal.toString() << endl
+		<< "\tWheels: " << wheels.toString() << endl
+		<< "\tBoost: " << boost.toString() << endl
+		<< "\tAntenna: " << antenna.toString() << endl
+		<< "\tTopper: " << topper.toString() << endl
+		<< "\tTrail: " << trail.toString() << endl
+		<< "\tGoal Explosion: " << goalExplosion.toString() << endl
+		<< "BakkesMod code: " << toBMCode() << endl;
+	return oss.str();
+}
+
+std::string Loadout::getItemString(std::string itemType, std::string outputSeparator, bool showSlotName, bool showBMCode)
+{
+	if (itemType.compare("json") == 0) {
+		stringstream oss;
+		oss << "{\"body\":" << quoted(body.toString()) << ","
+			<< "\"primary\":{\"paint\":" << quoted(primaryPaint.toString(true)) << ",\"finish\":" << quoted(primaryFinish.toString()) << "},"
+			<< "\"accent\":{\"paint\":" << quoted(accentPaint.toString(false)) << ",\"finish\":" << quoted(accentFinish.toString()) << "},"
+			<< "\"decal\":" << quoted(decal.toString()) << ","
+			<< "\"wheels\":" << quoted(wheels.toString()) << ","
+			<< "\"boost\":" << quoted(boost.toString()) << ","
+			<< "\"trail\":" << quoted(trail.toString()) << ","
+			<< "\"goal explosion\":" << quoted(goalExplosion.toString()) << ","
+			<< "\"engine audio\":" << quoted(engineAudio.toString()) << ","
+			<< "\"antenna\":" << quoted(antenna.toString()) << ","
+			<< "\"topper\":" << quoted(topper.toString()) << ","
+			<< "\"bm code\":" << toBMCode() << "}";
+		return oss.str();
+	}
+
+	if (itemType.compare("body") == 0 || itemType.compare("car") == 0) {
+		return body.toString();
+	}
+	if (itemType.compare("decal") == 0 || itemType.compare("skin") == 0) {
+		return decal.toString();
+	}
+	if (itemType.compare("wheels") == 0) {
+		return wheels.toString();
+	}
+	if (itemType.compare("boost") == 0) {
+		return boost.toString();
+	}
+	if (itemType.compare("antenna") == 0) {
+		return antenna.toString();
+	}
+	if (itemType.compare("topper") == 0) {
+		return topper.toString();
+	}
+	if (itemType.compare("engine") == 0) {
+		return engineAudio.toString();
+	}
+	if (itemType.compare("trail") == 0) {
+		return trail.toString();
+	}
+	if (itemType.compare("goal explosion") == 0 || itemType.compare("ge") == 0) {
+		return goalExplosion.toString();
+	}
+	if (itemType.empty()) {
+		stringstream oss;
+		APPEND_STRING_WITH_ITEM(oss, "", showSlotName, "body", body.toString());
+		APPEND_STRING_WITH_ITEM(oss, outputSeparator, showSlotName, "primary", primaryPaint.toString(true));
+		APPEND_STRING_WITH_ITEM(oss, " ", false, "", primaryFinish.toString());
+		APPEND_STRING_WITH_ITEM(oss, outputSeparator, showSlotName, "accent", accentPaint.toString(false));
+		APPEND_STRING_WITH_ITEM(oss, " ", false, "", accentFinish.toString());
+		APPEND_STRING_WITH_ITEM(oss, outputSeparator, showSlotName, "decal", decal.toString());
+		APPEND_STRING_WITH_ITEM(oss, outputSeparator, showSlotName, "wheels", wheels.toString());
+		APPEND_STRING_WITH_ITEM(oss, outputSeparator, showSlotName, "boost", boost.toString());
+		APPEND_STRING_WITH_ITEM(oss, outputSeparator, showSlotName, "trail", trail.toString());
+		APPEND_STRING_WITH_ITEM(oss, outputSeparator, showSlotName, "ge", goalExplosion.toString());
+		if (engineAudio.productId != 0)
+			APPEND_STRING_WITH_ITEM(oss, outputSeparator, showSlotName, "engine", engineAudio.toString());
+		if (antenna.productId != 0)
+			APPEND_STRING_WITH_ITEM(oss, outputSeparator, showSlotName, "antenna", antenna.toString());
+		if (topper.productId != 0)
+			APPEND_STRING_WITH_ITEM(oss, outputSeparator, showSlotName, "topper", topper.toString());
+		if (showBMCode)
+			APPEND_STRING_WITH_ITEM(oss, outputSeparator, showSlotName, "bm code", toBMCode());
+		return oss.str();
+	}
+
+	return "unknown item type requested. options: body, decal, wheels, boost, antenna, topper, engine, trail, goal explosion, or ge";
+}
+
+void LoadoutItem::clear()
+{
+	this->type = NONE;
+	this->instanceId = 0;
+	this->productId = 0;
+	this->paintId = 0;
+	this->teamId = 0;
+	this->itemString = "None";
+}
+
+void LoadoutItem::handleAttributes(ArrayWrapper<ProductAttributeWrapper> attrs, std::shared_ptr<GameWrapper> gw)
+{
+	stringstream ss;
+	for (int i = 0; i < attrs.Count(); i++) {
+		auto attr = attrs.Get(i);
+		if (attr.GetAttributeType().compare("ProductAttribute_Certified_TA") == 0) {
+			auto statName = gw->GetItemsWrapper().GetCertifiedStatDB().GetStatName(ProductAttribute_CertifiedWrapper(attr.memory_address).GetStatId());
+			ss << " " << statName << " Certified";
+		}
+		else if (attr.GetAttributeType().compare("ProductAttribute_Painted_TA") == 0) {
+			this->paintId = ProductAttribute_PaintedWrapper(attr.memory_address).GetPaintID();
+			ss << " " << PaintToString[this->paintId];
+		}
+		else if (attr.GetAttributeType().compare("ProductAttribute_SpecialEdition_TA") == 0) {
+			auto specEdName = gw->GetItemsWrapper().GetSpecialEditionDB().GetSpecialEditionName(ProductAttribute_SpecialEditionWrapper(attr.memory_address).GetEditionID());
+			if (specEdName.find("Edition_") == 0) {
+				specEdName = specEdName.substr(8);
+			}
+			ss << " " << specEdName;
+		}
+		else if (attr.GetAttributeType().compare("ProductAttribute_TeamEdition_TA") == 0) {
+			this->teamId = ProductAttribute_TeamEditionWrapper(attr.memory_address).GetId();
+			auto teamEdName = gw->GetItemsWrapper().GetEsportTeamDB().GetName(this->teamId);
+			if (TeamAppendEsports.find(teamEdName) != TeamAppendEsports.end()) {
+				teamEdName += " Esports";
+			}
+			ss << " " << teamEdName;
+		}
+	}
+	this->itemString += ss.str();
+}
+
+void LoadoutItem::fromItem(unsigned long long id, bool isOnline, std::shared_ptr<GameWrapper> gw)
+{
+	if (id == 0) return;
+	auto iw = gw->GetItemsWrapper();
+	if (iw.IsNull()) return;
+
+	// I really don't know diff between products and online products, so this might be a dumb way of doing things...
+	if (isOnline) {
+		auto onlineProduct = iw.GetOnlineProduct(id);
+		if (onlineProduct.IsNull()) return;
+
+		this->productId = onlineProduct.GetProductID();
+		this->itemString = onlineProduct.GetLongLabel().ToString();
+		handleAttributes(onlineProduct.GetAttributes(), gw);
+	}
+	else {
+		auto product = iw.GetProduct(id);
+		if (product.IsNull()) return;
+
+		this->productId = id;
+		this->itemString = product.GetLongLabel().ToString();
+		handleAttributes(product.GetAttributes(), gw);
+	}
+
+	this->instanceId = id;
+	this->type = BAKKESMOD;
+}
+
+void LoadoutItem::fromBMItem(BM::Item item, std::shared_ptr<GameWrapper> gw)
+{
+	if (item.product_id == 0) return;
+	this->instanceId = item.product_id;
+	this->paintId = item.paint_index;
+	this->type = BAKKESMOD;
+
+	auto product = gw->GetItemsWrapper().GetProduct(instanceId);
+
+	stringstream ss;
+	ss << product.GetAsciiLabel().ToString();
+	if (paintId != 0) {
+		ss << " " << PaintToString[paintId];
+	}
+
+	this->itemString = ss.str();
+	handleAttributes(OnlineProductWrapper(product.memory_address).GetAttributes(), gw);
+}
+
+void LoadoutItem::fromAlphaConsolePlugin(std::shared_ptr<CVarManagerWrapper> cvarManager, int teamNum, std::string itemType)
+{
+	string teamStr = teamNum == 0 ? "blue" : "orange";
+
+	if (itemType.compare("wheel") == 0 || itemType.compare("antenna") == 0 || itemType.compare("decal") || itemType.compare("topper")) {
+		// Get the cvar values
+		CVarWrapper cvarTexture = cvarManager->getCvar("acplugin_" + itemType + "texture_selectedtexture_" + teamStr);
+		if (cvarTexture.IsNull()) return;
+		auto texture = cvarTexture.getStringValue();
+
+		// Get reactive cvars if wheel
+		bool reactive = false;
+		string reactiveMultiplier;
+		if (itemType.compare("wheel") == 0) {
+			auto cvarReactive = cvarManager->getCvar("acplugin_reactivewheels_enabled");
+			if (!cvarReactive.IsNull() && cvarReactive.getBoolValue()) {
+				auto cvarMulti = cvarManager->getCvar("acplugin_reactivewheels_brightnessmultiplier");
+				if (!cvarMulti.IsNull()) {
+					reactive = true;
+					reactiveMultiplier = cvarMulti.getStringValue();
+				}
+			}
+		}
+
+		if (texture.compare("Default") == 0) {
+			if (reactive) {
+				this->itemString += " (AlphaConsole reactive: " + reactiveMultiplier + "x)";
+			}
+			return;
+		}
+
+		this->type = ALPHA_CONSOLE;
+		this->itemString = "AlphaConsole: " + texture;
+		if (reactive) {
+			this->itemString += " (Reactive: " + reactiveMultiplier + "x)";
+		}
+	}
+}
+
+void LoadoutItem::addTeamId(uint8_t teamId, std::shared_ptr<GameWrapper> gw)
+{
+	this->teamId = teamId;
+	auto teamEdName = gw->GetItemsWrapper().GetEsportTeamDB().GetName(this->teamId);
+	if (TeamAppendEsports.find(teamEdName) != TeamAppendEsports.end()) {
+		teamEdName += " Esports";
+	}
+	this->itemString += " " + teamEdName;
+}
+
+std::string LoadoutItem::toString()
+{
+	return this->itemString;
+}
+
+void PaintItem::clear()
+{
+	this->type = NONE;
+	this->paintId = 0;
+	this->itemString = "";
+}
+
+/*void PaintItem::fromPaintId(int paintId, bool isPrimary, TArray<struct FGFxTeamColor> colorSet)
+{
+	int rowLength = isPrimary ? 10 : 15;
+	if (paintId < colorSet.Num()) {
+		auto color = colorSet[paintId].Value;
+
+		this->paintId = paintId;
+		this->r = color.R;
+		this->g = color.G;
+		this->b = color.B;
+		this->itemString = "Row: " + to_string((paintId / rowLength) + 1) + ", Col: " + to_string((paintId % rowLength) + 1);
+	}
+}*/
+
+void PaintItem::fromBMPaint(BM::RGB paint)
+{
+	this->r = paint.r;
+	this->g = paint.g;
+	this->b = paint.b;
+	this->type = BAKKESMOD;
+	this->itemString = "BM: (R: " + to_string(this->r) + ", G: " + to_string(this->g) + ", B: " + to_string(this->b) + ")";
+}
+
+void PaintItem::fromRainbowPlugin(std::shared_ptr<CVarManagerWrapper> cvarManager, bool isPrimary)
+{
+	string pType = isPrimary ? "Primary" : "Secondary";
+
+	auto cvarEnabled = cvarManager->getCvar("RainbowCar_" + pType + "_Enable");
+	if (cvarEnabled.IsNull() || cvarEnabled.getBoolValue() == false) {
+		return;
+	}
+
+	auto cvarReverse = cvarManager->getCvar("RainbowCar_" + pType + "_Reverse");
+	auto cvarSaturation = cvarManager->getCvar("RainbowCar_" + pType + "_Saturation");
+	auto cvarSpeed = cvarManager->getCvar("RainbowCar_" + pType + "_Speed");
+	auto cvarValue = cvarManager->getCvar("RainbowCar_" + pType + "_Value");
+
+	if (cvarReverse.IsNull() || cvarSaturation.IsNull() || cvarSpeed.IsNull() || cvarValue.IsNull()) {
+		return;
+	}
+
+	this->type = RAINBOW_PLUGIN;
+	this->reverse = cvarReverse.getBoolValue();
+	this->saturation = cvarSaturation.getFloatValue();
+	this->speed = cvarSpeed.getFloatValue();
+	this->value = cvarValue.getFloatValue();
+
+	stringstream out;
+	out.precision(3);
+	out << "Rainbow: (";
+	if (this->reverse) out << "Reversed, ";
+	out << "Sat: " << this->saturation
+		<< ", Spd: " << this->speed
+		<< ", Val: " << this->value
+		<< ")";
+
+	this->itemString = out.str();
+}
+
+std::string PaintItem::toString(bool isPrimary)
+{
+	return this->itemString;
+}
+
+void Loadout::assignItemToSlot(unsigned long long id, bool isOnline, std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw)
+{
+	// Hack for now to fit BakkesMod loadout support into existing code
+	if (id == 0) return;
+
+	auto iw = gw->GetItemsWrapper();
+	if (iw.IsNull()) return;
+
+	// I really don't know diff between products and online products, so this might be a dumb way of doing things...
+	ProductWrapper* pw = nullptr;
+	if (isOnline) {
+		auto onlineProduct = iw.GetOnlineProduct(id);
+		if (!onlineProduct.IsNull()) {
+			pw = &onlineProduct.GetProduct();
+		}		
+	}
+	
+	if (pw == nullptr || pw->IsNull()) {
+		auto product = iw.GetProduct(id);
+		if (product.IsNull()) return;
+		pw = &product;
+	}
+
+	auto slot = pw->GetSlot();
+	if (slot.IsNull()) {
+		cv->log("slot is null?");
+		return;
+	}
+
+	int slotIdx = slot.GetSlotIndex();
+
+	switch (slotIdx) {
+	case BM::SLOT_BODY: ASSIGN_ITEM_TO_SLOT(id, this->body, isOnline, gw); break;
+	case BM::SLOT_SKIN: ASSIGN_ITEM_TO_SLOT(id, this->decal, isOnline, gw); break;
+	case BM::SLOT_WHEELS: ASSIGN_ITEM_TO_SLOT(id, this->wheels, isOnline, gw); break;
+	case BM::SLOT_BOOST: ASSIGN_ITEM_TO_SLOT(id, this->boost, isOnline, gw); break;
+	case BM::SLOT_ANTENNA: ASSIGN_ITEM_TO_SLOT(id, this->antenna, isOnline, gw); break;
+	case BM::SLOT_HAT: ASSIGN_ITEM_TO_SLOT(id, this->topper, isOnline, gw); break;
+	case BM::SLOT_PAINTFINISH: ASSIGN_ITEM_TO_SLOT(id, this->primaryFinish, isOnline, gw); break;
+	case BM::SLOT_PAINTFINISH_SECONDARY: ASSIGN_ITEM_TO_SLOT(id, this->accentFinish, isOnline, gw); break;
+	case BM::SLOT_ENGINE_AUDIO: ASSIGN_ITEM_TO_SLOT(id, this->engineAudio, isOnline, gw); break;
+	case BM::SLOT_SUPERSONIC_TRAIL: ASSIGN_ITEM_TO_SLOT(id, this->trail, isOnline, gw); break;
+	case BM::SLOT_GOALEXPLOSION: ASSIGN_ITEM_TO_SLOT(id, this->goalExplosion, isOnline, gw); break;
+	}
+}
+
+void Loadout::fromLoadoutWrapper(int teamNum, std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw)
+{
+	// TODO: Figure out how BM exposes paints
+
+	auto iw = gw->GetItemsWrapper();
+	if (iw.IsNull()) {
+		cv->log("ItemsWrapper is NULL. Cannot load loadout.");
+		return;
+	}
+
+	auto lw = iw.GetCurrentLoadout(teamNum);
+
+	if (_globalBMVersion <= 141) {
+		cv->log("BMVersion <= 141, fixing loadout dereference");
+		lw = LoadoutWrapper(*reinterpret_cast<uintptr_t*>(lw.memory_address));
+	}
+
+	auto items = lw.GetLoadout();
+	auto onlineItems = lw.GetOnlineLoadout();
+
+	for (int i = 0; i < items.Count(); i++) {
+		assignItemToSlot(items.Get(i), false, cv, gw);
+	}
+
+	for (int i = 0; i < onlineItems.Count(); i++) {
+		assignItemToSlot(onlineItems.Get(i), true, cv, gw);
+	}
+
+	primaryPaint.itemString = "Unknown";
+	accentPaint.itemString = "Unknown";
+}
+
+void Loadout::load(int teamNum, std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw)
+{
+	fromLoadoutWrapper(teamNum, cv, gw);
+	fromBakkesMod(teamNum, cv, gw);
+	fromPlugins(teamNum, cv, gw);
+}
+
+void Loadout::clear()
+{
+	this->body.clear();
+	this->decal.clear();
+	this->wheels.clear();
+	this->boost.clear();
+	this->antenna.clear();
+	this->topper.clear();
+	this->primaryFinish.clear();
+	this->accentFinish.clear();
+	this->engineAudio.clear();
+	this->trail.clear();
+	this->goalExplosion.clear();
+
+	this->primaryPaint.clear();
+	this->accentPaint.clear();
+}

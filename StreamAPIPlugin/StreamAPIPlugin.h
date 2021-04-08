@@ -1,0 +1,98 @@
+#pragma once
+
+#define WIN32_LEAN_AND_MEAN
+#define _CRT_SECURE_NO_WARNINGS
+
+#include "cpp-httplib/httplib.h"
+#include "bakkesmod/plugin/bakkesmodplugin.h"
+#include "version.h"
+#include "Loadout.h"
+
+#include <string>
+#include <vector>
+#include <functional>
+#include <memory>
+#include <sstream>
+#include <thread>
+
+#include "fmt/core.h"
+#include "fmt/ranges.h"
+
+extern std::shared_ptr<CVarManagerWrapper> _globalCvarManager;
+extern int _globalBMVersion;
+
+constexpr auto plugin_version = stringify(VERSION_MAJOR) "." stringify(VERSION_MINOR) "." stringify(VERSION_PATCH); // "." stringify(VERSION_BUILD);
+
+const std::string PREVIEW_TEAMNUM_CHANGED_EVENT = "Function TAGame.CarPreviewActor_TA.SetTeamIndex";
+
+const std::string LOADOUT_CHANGED_EVENT = "Function TAGame.CarMeshComponent_TA.SetLoadout";
+const std::string SENS_CHANGED_EVENT = "Function TAGame.GFxData_Controls_TA.HandleActiveBindingsChanged";
+const std::string CAMERA_CHANGED_EVENT = "Function TAGame.GFxData_Settings_TA.OnCameraOptionChanged";
+const std::string BINDINGS_CHANGED_EVENT = "Function TAGame.PlayerInput_Menu_TA.OnActiveBindingsChanged";
+
+// Should probably just hook on UserSetting change for all but loadout...
+const std::string VIDEO_CHANGED_EVENTS[] = {
+	"Function TAGame.GFxData_Settings_TA.OnAdvancedVideoOptionChanged",
+	"Function TAGame.GFxData_Settings_TA.ApplyViewportSettings",
+	"Function TAGame.GFxData_Settings_TA.SetWeatherFX",
+	"Function TAGame.GFxData_Settings_TA.SetLensFlares",
+	"Function TAGame.GFxData_Settings_TA.SetEffectIntensity",
+	"Function TAGame.PostProcessManager_TA.ApplyPostProcessTypeOverride",
+};
+
+const std::string CAMERA_INVERT_SWIVEL_CHANGED_EVENT = "Function TAGame.GFxData_Settings_TA.SetInvertSwivelPitch";
+const std::string CAMERA_SHAKE_CHANGED_EVENT = "Function TAGame.GFxData_Settings_TA.SetCameraShake";
+
+const short BAKKESMOD_VERSION = 140;
+
+template<typename S, typename... Args>
+void LOG(const S& format_str, Args&&... args)
+{
+	_globalCvarManager->log(fmt::format(format_str, args...));
+}
+
+class StreamAPIPlugin : public BakkesMod::Plugin::BakkesModPlugin
+{
+	virtual void onLoad();
+	virtual void onUnload();
+
+private:
+	void getLoadout();
+	void getSens();
+	void getCamera();
+	void getBindings();
+	void getVideo();
+
+	int previewTeamNum = 0;
+	Loadout loadout;
+	std::string sensStr;
+	std::string cameraStr;
+	std::string controllerBindingsStr;
+	std::string kbmBindingsStr;
+	std::string videoStr;
+
+private:
+	void onDump(std::vector<std::string> params);
+
+private:
+	/* Http Server */
+	int serverPort;
+	int runningServerPort;
+	httplib::Server httpServer;
+	std::thread httpThread;
+	void runHttpServer(int port);
+
+private:
+	/* Commands */
+	std::string loadoutCommand(std::string args);
+	std::string sensCommand(std::string args);
+	std::string cameraCommand(std::string args);
+	std::string bindingsCommand(std::string args);
+	std::string videoCommand(std::string args);
+
+	std::map<std::string, std::function<std::string(std::string args)> > commandNameToCommand;
+
+	std::string outputSeparator = " | ";
+	bool showSlotName = true;
+	bool showBMCode = true;
+};
