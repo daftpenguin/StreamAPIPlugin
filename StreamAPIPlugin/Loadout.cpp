@@ -64,6 +64,8 @@ BM::RGB read_colors_from_buffer(BitBinaryReader<unsigned char>& reader)
 
 void Loadout::fromBakkesMod(int teamNum, std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw)
 {
+	bool boostSet = false;
+
 	if (cv->getCvar("cl_itemmod_enabled").getBoolValue()) {
 		string code = cv->getCvar("cl_itemmod_code").getStringValue();
 
@@ -150,6 +152,16 @@ void Loadout::fromBakkesMod(int teamNum, std::shared_ptr<CVarManagerWrapper> cv,
 
 		this->primaryPaint.fromBMPaint((teamNum == 0 ? bmloadout.body.blueColor.primary_colors : bmloadout.body.orangeColor.primary_colors));
 		this->accentPaint.fromBMPaint((teamNum == 0 ? bmloadout.body.blueColor.secondary_colors : bmloadout.body.orangeColor.secondary_colors));
+
+		boostSet = items[BM::SLOT_BOOST].product_id != 0;
+	}
+
+	// TODO: Doesn't alpha console also have painted alpha boost?
+	if (!boostSet) {
+		auto alphaBoostCvar = cv->getCvar("cl_alphaboost");
+		if (!alphaBoostCvar.IsNull() && alphaBoostCvar.getBoolValue()) {
+			this->boost.fromBMItem(BM::Item{ 3, 32, 0 }, gw);
+		}
 	}
 }
 
@@ -398,20 +410,46 @@ void LoadoutItem::fromItem(unsigned long long id, bool isOnline, std::shared_ptr
 void LoadoutItem::fromBMItem(BM::Item item, std::shared_ptr<GameWrapper> gw)
 {
 	if (item.product_id == 0) return;
+
+	auto product = gw->GetItemsWrapper().GetProduct(item.product_id);
+	if (product.IsNull()) {
+		return;
+	}
+
 	this->instanceId = item.product_id;
 	this->paintId = item.paint_index;
 	this->type = BAKKESMOD;
 
-	auto product = gw->GetItemsWrapper().GetProduct(instanceId);
-
 	stringstream ss;
-	ss << product.GetAsciiLabel().ToString();
-	if (paintId != 0) {
-		ss << " " << PaintToString[paintId];
+	
+	bool labelSet = false;
+	auto label = product.GetLongLabel();
+	if (label.IsNull()) {
+		auto label = product.GetAsciiLabel();
+		if (!label.IsNull()) {
+			ss << label.ToString();
+			labelSet = true;
+		}
+		else {
+			ss << "None";
+		}
+	}
+	else {
+		ss << label.ToString();
+		labelSet = true;
+	}
+
+	if (labelSet) {
+		if (paintId != 0) {
+			ss << " " << PaintToString[paintId];
+		}
 	}
 
 	this->itemString = ss.str();
-	handleAttributes(OnlineProductWrapper(product.memory_address).GetAttributes(), gw);
+
+	if (labelSet) {
+		handleAttributes(OnlineProductWrapper(product.memory_address).GetAttributes(), gw);
+	}
 }
 
 void LoadoutItem::fromAlphaConsolePlugin(std::shared_ptr<CVarManagerWrapper> cvarManager, int teamNum, std::string itemType)
