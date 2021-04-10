@@ -77,6 +77,11 @@ void StreamAPIPlugin::onLoad()
 	getBindings();
 	getVideo();
 	getTrainingPack();
+	ranks.getRanks(gameWrapper);
+	gameWrapper->GetMMRWrapper().RegisterMMRNotifier([this](UniqueIDWrapper id) { if (id == gameWrapper->GetUniqueID()) ranks.updateRank(gameWrapper); });
+	gameWrapper->SetTimeout([this](GameWrapper* gw) { // Doesn't appear to update when ranks are initially retrieved
+		ranks.getRanks(gameWrapper);
+		}, 10.0f);
 
 	gameWrapper->HookEventPost(LOADOUT_CHANGED_EVENT, [this](string eventName) { getLoadout(); });
 	gameWrapper->HookEventPost(SENS_CHANGED_EVENT, [this](string eventName) { getSens(); });
@@ -93,6 +98,7 @@ void StreamAPIPlugin::onLoad()
 	commandNameToCommand["bindings"] = std::bind(&StreamAPIPlugin::bindingsCommand, this, std::placeholders::_1);
 	commandNameToCommand["video"] = std::bind(&StreamAPIPlugin::videoCommand, this, std::placeholders::_1);
 	commandNameToCommand["training"] = std::bind(&StreamAPIPlugin::trainingCommand, this, std::placeholders::_1);
+	commandNameToCommand["rank"] = std::bind(&StreamAPIPlugin::rankCommand, this, std::placeholders::_1);
 }
 
 void StreamAPIPlugin::onUnload()
@@ -243,6 +249,7 @@ void StreamAPIPlugin::onDump(vector<string> params)
 	getCamera();
 	getBindings();
 	getVideo();
+	ranks.getRanks(gameWrapper);
 
 	cvarManager->log(this->loadout.toString());
 	cvarManager->log("Sens: \n\t" + sensStr);
@@ -250,6 +257,7 @@ void StreamAPIPlugin::onDump(vector<string> params)
 	cvarManager->log("Controller bindings: \n\t" + controllerBindingsStr);
 	cvarManager->log("KBM bindings: \n\t" + kbmBindingsStr);
 	cvarManager->log("Video: \n\t" + videoStr);
+	cvarManager->log("Ranks: \n\t" + ranks.toString("", cvarManager));
 }
 
 void StreamAPIPlugin::runHttpServer(int port)
@@ -313,4 +321,9 @@ std::string StreamAPIPlugin::videoCommand(std::string args)
 std::string StreamAPIPlugin::trainingCommand(std::string args)
 {
 	return trainingPackStr;
+}
+
+std::string StreamAPIPlugin::rankCommand(std::string args)
+{
+	return ranks.toString(args, cvarManager);
 }

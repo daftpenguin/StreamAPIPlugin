@@ -7,6 +7,7 @@
 #include "bakkesmod/plugin/bakkesmodplugin.h"
 #include "version.h"
 #include "Loadout.h"
+#include "Ranks.h"
 
 #include <string>
 #include <vector>
@@ -73,6 +74,7 @@ private:
 	std::string kbmBindingsStr;
 	std::string videoStr;
 	std::string trainingPackStr = "No training pack";
+	Ranks ranks;
 
 private:
 	void onDump(std::vector<std::string> params);
@@ -93,6 +95,7 @@ private:
 	std::string bindingsCommand(std::string args);
 	std::string videoCommand(std::string args);
 	std::string trainingCommand(std::string args);
+	std::string rankCommand(std::string args);
 
 	std::map<std::string, std::function<std::string(std::string args)> > commandNameToCommand;
 

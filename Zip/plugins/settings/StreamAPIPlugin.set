@@ -1,0 +1,10 @@
+Stream API Plugin
+9|If the plugin is loaded, the port number (grayed out) should be shown below.
+9|The port is grayed out because you cannot currently change the port in this window.
+9|To change the port, press F6 for the console window, and type (without quotes) "streamapi_port 10111" and press enter.
+9|Replace 10111 with any integer between 1024 and 49151 (inclusively).
+10|streamapi_gray_port
+12|HTTP API Port|streamapi_port
+11|
+8|
+9|Plugin made by DaftPenguin

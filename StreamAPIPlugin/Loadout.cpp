@@ -66,8 +66,12 @@ void Loadout::fromBakkesMod(int teamNum, std::shared_ptr<CVarManagerWrapper> cv,
 {
 	bool boostSet = false;
 
-	if (cv->getCvar("cl_itemmod_enabled").getBoolValue()) {
-		string code = cv->getCvar("cl_itemmod_code").getStringValue();
+	auto itemModEnabled = cv->getCvar("cl_itemmod_enabled");
+	auto itemModCode = cv->getCvar("cl_itemmod_code");
+
+	if (!itemModEnabled.IsNull() && !itemModCode && itemModEnabled.getBoolValue()) {
+		
+		string code = itemModCode.getStringValue();
 
 		BitBinaryReader<unsigned char> reader(code);
 		BM::BMLoadout bmloadout;

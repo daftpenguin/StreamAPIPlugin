@@ -24,6 +24,9 @@
     <ClCompile Include="Loadout.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Ranks.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="StreamAPIPlugin.h">
@@ -43,6 +46,9 @@
     </ClInclude>
     <ClInclude Include="BMLoadoutLib\helper_classes.h">
       <Filter>Source Files\BMLoadoutLib</Filter>
+    </ClInclude>
+    <ClInclude Include="Ranks.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
