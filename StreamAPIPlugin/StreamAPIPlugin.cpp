@@ -161,10 +161,74 @@ void StreamAPIPlugin::getCamera()
 	cameraStr = oss.str();
 }
 
+std::map<std::string, std::string> antiAliasValueToName({
+	{ "0", "Off" },
+	{ "2", "FXAA Low" },
+	{ "4", "FXAA Medium" },
+	{ "6", "FXAA High" },
+	{ "7", "MLAA" },
+	{ "8", "SMAA" },
+	});
+
+std::map<std::string, std::string> textureDetailToName({
+	{ "TexturesHigher", "High Quality" },
+	{ "TexturesHigh", "Quality" },
+	{ "TexturesMedium", "Performance" },
+	{ "TexturesLow", "High Performance" },
+	});
+
+std::map<int, std::string> windowModeToName({
+	{ 0, "Fullscreen" },
+	{ 1, "Windowed" },
+	{ 2, "Borderless" },
+	});
+
+std::map<std::string, std::string> videoOptionsRename({
+	{ "RanderDetail", "Render Detail" }
+	});
+
 void StreamAPIPlugin::getVideo()
 {
 	cvarManager->log("Updating video settings");
-	videoStr = "Not implemented yet";
+
+	auto settings = gameWrapper->GetSettings().GetVideoSettings();
+
+	// Missing: Render Quality, World Detail, Particle Detail, Effect Intensity, High Quality Shaders, Ambient Occlusion, Depth of Field, Bloom, Dynamic Shadows, Motion Blur
+
+	stringstream oss;
+	
+	if (settings.MaxFPS == 10000) {
+		oss << "FPS: Uncapped" << outputSeparator;
+	}
+	else {
+		oss << "FPS: " << settings.MaxFPS << outputSeparator;
+	}
+	oss << settings.Resolution << outputSeparator;
+	oss << windowModeToName[settings.WindowMode] << outputSeparator;
+
+	if (settings.bVsync) oss << "Vsync" << outputSeparator;
+	if (settings.bShowLensFlares) oss << "Lens Flares" << outputSeparator;
+	if (settings.bShowLightShafts) oss << "Light Shafts" << outputSeparator;
+	if (settings.bShowWeatherFX) oss << "Weather FX" << outputSeparator;
+	if (settings.bTranslucentArenaShaders) oss << "Transparent Goalposts" << outputSeparator;
+	
+	for (auto it = settings.VideoOptions.begin(); it != settings.VideoOptions.end(); ++it) {
+		if (it->first.compare("AntiAlias") == 0) {
+			auto aa = antiAliasValueToName.find(it->second);
+			oss << "Anti-Alias: " << (aa != antiAliasValueToName.end() ? aa->second : it->second) << outputSeparator;
+		}
+		else if (it->first.compare("TextureDetail") == 0) {
+			auto td = textureDetailToName.find(it->second);
+			oss << "Texture Detail: " << (td != textureDetailToName.end() ? td->second : it->second) << outputSeparator;
+		}
+		else {
+			auto rename = videoOptionsRename.find(it->first);
+			oss << (rename != videoOptionsRename.end() ? rename->second : it->first) << ": " << it->second << outputSeparator;
+		}
+	}
+	
+	videoStr = oss.str();
+	videoStr = videoStr.substr(0, videoStr.size() - outputSeparator.size()) + " (not all settings suppported yet)";
 }
 
 void StreamAPIPlugin::getBindings()
