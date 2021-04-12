@@ -18,6 +18,8 @@ BAKKESMOD_PLUGIN(StreamAPIPlugin, "Stream API Plugin", plugin_version, PLUGINTYP
 std::shared_ptr<CVarManagerWrapper> _globalCvarManager;
 int _globalBMVersion = 0;
 
+// TODO: external chat bot support
+
 void StreamAPIPlugin::onLoad()
 {
 	_globalCvarManager = cvarManager;

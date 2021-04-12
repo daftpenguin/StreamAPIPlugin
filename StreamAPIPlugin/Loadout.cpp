@@ -69,7 +69,7 @@ void Loadout::fromBakkesMod(int teamNum, std::shared_ptr<CVarManagerWrapper> cv,
 	auto itemModEnabled = cv->getCvar("cl_itemmod_enabled");
 	auto itemModCode = cv->getCvar("cl_itemmod_code");
 
-	if (!itemModEnabled.IsNull() && !itemModCode && itemModEnabled.getBoolValue()) {
+	if (!itemModEnabled.IsNull() && !itemModCode.IsNull() && itemModEnabled.getBoolValue()) {
 		
 		string code = itemModCode.getStringValue();
 
