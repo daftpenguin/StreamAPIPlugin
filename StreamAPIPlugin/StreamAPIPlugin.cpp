@@ -233,30 +233,195 @@ void StreamAPIPlugin::getVideo()
 	videoStr = videoStr.substr(0, videoStr.size() - outputSeparator.size()) + " (not all settings suppported yet)";
 }
 
+unordered_map<string, string> ds4Renames({
+	{ "XboxTypeS_A", "Cross" },
+	{ "XboxTypeS_B", "Circle" },
+	{ "XboxTypeS_X", "Square" },
+	{ "XboxTypeS_Y", "Triangle" },
+	{ "XboxTypeS_LeftShoulder", "L1" },
+	{ "XboxTypeS_LeftTriggerAxis", "L2" },
+	{ "XboxTypeS_RightShoulder", "R1" },
+	{ "XboxTypeS_RightTriggerAxis", "R2" },
+	{ "XboxTypeS_DPad_Up", "D-Up" },
+	{ "XboxTypeS_DPad_Down", "D-Down" },
+	{ "XboxTypeS_DPad_Left", "D-Left" },
+	{ "XboxTypeS_DPad_Right", "D-Right" },
+	{ "XboxTypeS_Start", "Options" },
+	{ "XboxTypeS_Back", "Share" },
+	{ "XboxTypeS_LeftY", "LS Y-axis" },
+	{ "XboxTypeS_LeftX", "LS X-axis" },
+	{ "XboxTypeS_RightY", "RS Y-axis" },
+	{ "XboxTypeS_RightX", "RS X-axis" },
+	{ "XboxTypeS_LeftThumbStick", "L3" },
+	{ "XboxTypeS_RightThumbStick", "R3" },
+	});
+
+unordered_map<string, string> xboxRenames({
+	{ "XboxTypeS_A", "A" },
+	{ "XboxTypeS_B", "B" },
+	{ "XboxTypeS_X", "X" },
+	{ "XboxTypeS_Y", "Y" },
+	{ "XboxTypeS_LeftShoulder", "LB" },
+	{ "XboxTypeS_LeftTriggerAxis", "LT" },
+	{ "XboxTypeS_RightShoulder", "RB" },
+	{ "XboxTypeS_RightTriggerAxis", "RT" },
+	{ "XboxTypeS_DPad_Up", "D-Up" },
+	{ "XboxTypeS_DPad_Down", "D-Down" },
+	{ "XboxTypeS_DPad_Left", "D-Left" },
+	{ "XboxTypeS_DPad_Right", "D-Right" },
+	{ "XboxTypeS_Start", "Start" },
+	{ "XboxTypeS_Back", "Back" },
+	{ "XboxTypeS_LeftY", "Left Stick Y-axis" },
+	{ "XboxTypeS_LeftX", "Left Stick X-axis" },
+	{ "XboxTypeS_RightY", "Right Stick Y-axis" },
+	{ "XboxTypeS_RightX", "Right Stick X-axis" },
+	{ "XboxTypeS_LeftThumbStick", "L3" },
+	{ "XboxTypeS_RightThumbStick", "R3" },
+	});
+
+unordered_map<string, string> actionRenames({
+	{ "ThrottleForward", "Forward" },
+	{ "ThrottleReverse", "Backwards" },
+	{ "SteerRight", "Steer Right" },
+	{ "SteerLeft", "Steer Left" },
+	{ "LookUp", "Look Up" },
+	{ "LookDown", "Look Down" },
+	{ "LookRight", "Look Right" },
+	{ "LookLeft", "Look Left" },
+	{ "SwivelUp", "Swivel Up" },
+	{ "SwivelDown", "Swivel Down" },
+	{ "SwivelRight", "Swivel Right" },
+	{ "SwivelLeft", "Swivel Left" },
+	{ "YawRight", "Yaw Right" },
+	{ "YawLeft", "Yaw Left" },
+	{ "PitchUp", "Pitch Up" },
+	{ "PitchDown", "Pitch Down" },
+	{ "RollRight", "Air Roll Right" },
+	{ "RollLeft", "Air Roll Left" },
+	{ "Jump", "Jump" },
+	{ "Boost", "Boost" },
+	{ "Handbrake", "Handbrake" },
+	{ "SecondaryCamera", "Focus On Ball" },
+	{ "ToggleRoll", "Air Roll" },
+	{ "RearCamera", "Rear Cam" },
+	{ "ToggleScoreboard", "Scoreboard" },
+	{ "PushToTalk", "Push To Talk" },
+	{ "ChatPreset1", "QC/Info" },
+	{ "ChatPreset2", "QC/Compliments" },
+	{ "ChatPreset3", "QC/Reactions" },
+	{ "ChatPreset4", "QC/Apologies" },
+	{ "ResetTraining", "Reset Shot" },
+	{ "AutoSaveReplay", "Save Replay" },
+	{ "UsePickup", "Use Item" },
+	{ "NextPickup", "Next Item" },
+	});
+
+const unordered_map<string, string> defaultGamepadBindings({
+	{ "ThrottleForward", "XboxTypeS_RightTriggerAxis" },
+	{ "ThrottleReverse", "XboxTypeS_LeftTriggerAxis" },
+	{ "SteerRight", "XboxTypeS_LeftX" },
+	{ "SteerLeft", "XboxTypeS_LeftX" },
+	{ "LookUp", "XboxTypeS_RightY" },
+	{ "LookDown", "XboxTypeS_RightY" },
+	{ "LookRight", "XboxTypeS_RightX" },
+	{ "LookLeft", "XboxTypeS_RightX" },
+	{ "SwivelUp", "XboxTypeS_RightY" },
+	{ "SwivelDown", "XboxTypeS_RightY" },
+	{ "SwivelRight", "XboxTypeS_RightX" },
+	{ "SwivelLeft", "XboxTypeS_RightX" },
+	{ "YawRight", "XboxTypeS_LeftX" },
+	{ "YawLeft", "XboxTypeS_LeftX" },
+	{ "PitchUp", "XboxTypeS_LeftY" },
+	{ "PitchDown", "XboxTypeS_LeftY" },
+	{ "RollRight", "None" },
+	{ "RollLeft", "None" },
+	{ "Jump", "XboxTypeS_A" },
+	{ "Boost", "XboxTypeS_B" },
+	{ "Handbrake", "XboxTypeS_X" },
+	{ "SecondaryCamera", "XboxTypeS_Y" },
+	{ "ToggleRoll", "XboxTypeS_LeftTrigger" },
+	{ "RearCamera", "XboxTypeS_RightThumbStick" },
+	{ "ToggleScoreboard", "XboxTypeS_LeftShoulder" },
+	{ "PushToTalk", "None" },
+	{ "ChatPreset1", "XboxTypeS_DPad_Up" },
+	{ "ChatPreset2", "XboxTypeS_DPad_Left" },
+	{ "ChatPreset3", "XboxTypeS_DPad_Right" },
+	{ "ChatPreset4", "XboxTypeS_DPad_Down" },
+	{ "ResetTraining", "XboxTypeS_RightShoulder" },
+	{ "AutoSaveReplay", "XboxTypeS_Back" },
+	{ "UsePickup", "XboxTypeS_LeftThumbStick" },
+	{ "NextPickup", "XboxTypeS_RightShoulder" },
+	});
+
+const unordered_map<string, string> defaultPCBindings;
+
+enum INPUT_TYPE {
+	DS4 = 0,
+	XBOX = 1,
+	KBM = 2,
+};
+
+std::string generateBindingsStr(const vector<pair<string, string>>& bindings, unordered_map<string, string>* inputRenamer,
+	const unordered_map<string, string>& defaultBindings, string bindingSeparator, string actionSeparator)
+{
+	stringstream oss;
+	bool isFirst = true;
+
+	oss << "Default bindings except: ";
+
+	//stringstream ods;
+
+	int changes = 0;
+	for (auto binding : bindings) {
+		// Only get actions within actionRenames
+		auto actionIt = actionRenames.find(binding.second);
+		if (actionIt == actionRenames.end()) continue;
+		auto action = actionIt->second;
+
+		//ods << "\n{ \"" << binding.second << "\", \"" << binding.first << "\" },";
+
+		// Ignore default bindings
+		auto def = defaultBindings.find(binding.second);
+		if (def == defaultBindings.end() || def->second.compare(binding.first) == 0) continue;
+
+		// Rename input if there's an input renamer and it's in the map
+		auto inputName = binding.first;
+		if (inputRenamer != nullptr) {
+			auto renameIt = inputRenamer->find(inputName);
+			if (renameIt != inputRenamer->end()) {
+				inputName = renameIt->second;
+			}
+		}
+
+		++changes;
+		if (!isFirst) oss << bindingSeparator;
+		oss << action << actionSeparator << inputName;
+		isFirst = false;
+	}
+
+	//_globalCvarManager->log(ods.str());
+
+	if (changes == 0) {
+		return "Default bindings";
+	}
+
+	return oss.str();
+}
+
 void StreamAPIPlugin::getBindings()
 {
 	cvarManager->log("Updating bindings");
 
-	stringstream oss;
-
-	map<string, string> bindings = gameWrapper->GetSettings().GetPCBindings();
-	bool isFirst = true;
-	for (auto it = bindings.begin(); it != bindings.end(); it++) {
-		if (!isFirst) oss << outputSeparator;
-		oss << it->first << ": " << it->second;
-		isFirst = false;
+	if (gameWrapper->GetSettings().GetAllGamepadBindings().size() == 0) {
+		ds4BindingsStr = generateBindingsStr(gameWrapper->GetSettings().GetAllPCBindings(), &ds4Renames, defaultGamepadBindings, outputSeparator, ": ");
+		xboxBindingsStr = generateBindingsStr(gameWrapper->GetSettings().GetAllPCBindings(), &xboxRenames, defaultGamepadBindings, outputSeparator, ": ");
+		kbmBindingsStr = "KBM bindings not supported yet (pending BakkesMod update)";
 	}
-	kbmBindingsStr = oss.str();
-	
-	oss.str("");
-	bindings = gameWrapper->GetSettings().GetGamepadBindings();
-	isFirst = true;
-	for (auto it = bindings.begin(); it != bindings.end(); it++) {
-		if (!isFirst) oss << outputSeparator;
-		oss << it->first << ": " << it->second;
-		isFirst = false;
+	else {
+		ds4BindingsStr = generateBindingsStr(gameWrapper->GetSettings().GetAllGamepadBindings(), &ds4Renames, defaultGamepadBindings, outputSeparator, ": ");
+		xboxBindingsStr = generateBindingsStr(gameWrapper->GetSettings().GetAllGamepadBindings(), &xboxRenames, defaultGamepadBindings, outputSeparator, ": ");
+		kbmBindingsStr = generateBindingsStr(gameWrapper->GetSettings().GetAllPCBindings(), nullptr, defaultPCBindings, outputSeparator, ": ");
 	}
-	controllerBindingsStr = oss.str();
 }
 
 void StreamAPIPlugin::getTrainingPack()
@@ -320,8 +485,9 @@ void StreamAPIPlugin::onDump(vector<string> params)
 	cvarManager->log(this->loadout.toString());
 	cvarManager->log("Sens: \n\t" + sensStr);
 	cvarManager->log("Camera: \n\t" + cameraStr);
-	cvarManager->log("Controller bindings: \n\t" + controllerBindingsStr);
 	cvarManager->log("KBM bindings: \n\t" + kbmBindingsStr);
+	cvarManager->log("Xbox bindings: \n\t" + xboxBindingsStr);
+	cvarManager->log("DS4 bindings: \n\t" + ds4BindingsStr);
 	cvarManager->log("Video: \n\t" + videoStr);
 	cvarManager->log("Ranks: \n\t" + ranks.toString("", cvarManager));
 }
@@ -375,8 +541,13 @@ std::string StreamAPIPlugin::cameraCommand(std::string args)
 
 std::string StreamAPIPlugin::bindingsCommand(std::string args)
 {
-	return "Not implemented yet";
-	return (args.compare("kbm") == 0 ? kbmBindingsStr : controllerBindingsStr);
+	if (args.compare("kbm") == 0) {
+		return kbmBindingsStr;
+	}
+	else if (args.compare("xbox")) {
+		return xboxBindingsStr;
+	}
+	return ds4BindingsStr;
 }
 
 std::string StreamAPIPlugin::videoCommand(std::string args)

@@ -70,8 +70,9 @@ private:
 	Loadout loadout;
 	std::string sensStr;
 	std::string cameraStr;
-	std::string controllerBindingsStr;
 	std::string kbmBindingsStr;
+	std::string ds4BindingsStr;
+	std::string xboxBindingsStr;
 	std::string videoStr;
 	std::string trainingPackStr = "No training pack";
 	Ranks ranks;

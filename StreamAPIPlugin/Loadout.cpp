@@ -18,6 +18,260 @@
 
 using namespace std;
 
+const vector<RGBColor> team0Colors = {
+	RGBColor(80, 127, 57),
+	RGBColor(57, 127, 63),
+	RGBColor(57, 127, 100),
+	RGBColor(57, 125, 127),
+	RGBColor(57, 107, 127),
+	RGBColor(57, 93, 127),
+	RGBColor(57, 79, 127),
+	RGBColor(57, 66, 127),
+	RGBColor(76, 57, 127),
+	RGBColor(81, 57, 127),
+	RGBColor(101, 178, 62),
+	RGBColor(62, 178, 72),
+	RGBColor(62, 178, 134),
+	RGBColor(62, 174, 178),
+	RGBColor(62, 145, 178),
+	RGBColor(62, 122, 178),
+	RGBColor(62, 99, 178),
+	RGBColor(62, 77, 178),
+	RGBColor(93, 62, 178),
+	RGBColor(103, 62, 178),
+	RGBColor(114, 229, 57),
+	RGBColor(57, 229, 71),
+	RGBColor(57, 229, 163),
+	RGBColor(57, 223, 229),
+	RGBColor(57, 180, 229),
+	RGBColor(57, 146, 229),
+	RGBColor(57, 111, 229),
+	RGBColor(57, 80, 229),
+	RGBColor(103, 57, 229),
+	RGBColor(117, 57, 229),
+	RGBColor(92, 252, 12),
+	RGBColor(12, 252, 32),
+	RGBColor(12, 252, 160),
+	RGBColor(12, 244, 252),
+	RGBColor(12, 184, 252),
+	RGBColor(12, 136, 252),
+	RGBColor(12, 88, 252),
+	RGBColor(12, 44, 252),
+	RGBColor(76, 12, 252),
+	RGBColor(96, 12, 252),
+	RGBColor(74, 204, 10),
+	RGBColor(10, 204, 26),
+	RGBColor(10, 204, 129),
+	RGBColor(10, 197, 204),
+	RGBColor(10, 149, 204),
+	RGBColor(10, 110, 204),
+	RGBColor(10, 71, 204),
+	RGBColor(10, 36, 204),
+	RGBColor(61, 10, 204),
+	RGBColor(78, 10, 204),
+	RGBColor(60, 165, 8),
+	RGBColor(8, 165, 21),
+	RGBColor(8, 165, 105),
+	RGBColor(8, 160, 165),
+	RGBColor(8, 121, 165),
+	RGBColor(8, 89, 165),
+	RGBColor(8, 58, 165),
+	RGBColor(8, 29, 165),
+	RGBColor(50, 8, 165),
+	RGBColor(63, 8, 165),
+	RGBColor(46, 127, 6),
+	RGBColor(6, 127, 16),
+	RGBColor(6, 127, 81),
+	RGBColor(6, 123, 127),
+	RGBColor(6, 93, 127),
+	RGBColor(6, 68, 127),
+	RGBColor(6, 44, 127),
+	RGBColor(6, 22, 127),
+	RGBColor(38, 6, 127),
+	RGBColor(48, 6, 127),
+};
+
+const vector<RGBColor> team1Colors = {
+	RGBColor(127, 127, 57),
+	RGBColor(127, 112, 57),
+	RGBColor(127, 99, 57),
+	RGBColor(127, 90, 57),
+	RGBColor(127, 84, 57),
+	RGBColor(127, 78, 57),
+	RGBColor(127, 71, 57),
+	RGBColor(127, 57, 57),
+	RGBColor(127, 57, 81),
+	RGBColor(127, 57, 92),
+	RGBColor(178, 178, 62),
+	RGBColor(178, 153, 62),
+	RGBColor(178, 132, 62),
+	RGBColor(178, 116, 62),
+	RGBColor(178, 106, 62),
+	RGBColor(178, 97, 62),
+	RGBColor(178, 85, 62),
+	RGBColor(178, 62, 62),
+	RGBColor(178, 62, 103),
+	RGBColor(178, 62, 120),
+	RGBColor(229, 229, 57),
+	RGBColor(229, 192, 57),
+	RGBColor(229, 160, 57),
+	RGBColor(229, 137, 57),
+	RGBColor(229, 123, 57),
+	RGBColor(229, 109, 57),
+	RGBColor(229, 91, 57),
+	RGBColor(229, 57, 57),
+	RGBColor(229, 57, 117),
+	RGBColor(229, 57, 143),
+	RGBColor(252, 252, 12),
+	RGBColor(252, 200, 12),
+	RGBColor(252, 156, 12),
+	RGBColor(252, 124, 12),
+	RGBColor(252, 104, 12),
+	RGBColor(252, 84, 12),
+	RGBColor(252, 60, 12),
+	RGBColor(252, 12, 12),
+	RGBColor(252, 12, 96),
+	RGBColor(252, 12, 132),
+	RGBColor(204, 204, 10),
+	RGBColor(204, 162, 10),
+	RGBColor(204, 126, 10),
+	RGBColor(204, 100, 10),
+	RGBColor(204, 84, 10),
+	RGBColor(204, 68, 10),
+	RGBColor(204, 48, 10),
+	RGBColor(204, 10, 10),
+	RGBColor(204, 10, 78),
+	RGBColor(204, 10, 107),
+	RGBColor(165, 165, 8),
+	RGBColor(165, 131, 8),
+	RGBColor(165, 102, 8),
+	RGBColor(165, 81, 8),
+	RGBColor(165, 68, 8),
+	RGBColor(165, 55, 8),
+	RGBColor(165, 39, 8),
+	RGBColor(165, 8, 8),
+	RGBColor(165, 8, 63),
+	RGBColor(165, 8, 87),
+	RGBColor(127, 127, 6),
+	RGBColor(127, 101, 6),
+	RGBColor(127, 79, 6),
+	RGBColor(127, 62, 6),
+	RGBColor(127, 52, 6),
+	RGBColor(127, 42, 6),
+	RGBColor(127, 30, 6),
+	RGBColor(127, 6, 6),
+	RGBColor(127, 6, 48),
+	RGBColor(127, 6, 66),
+};
+
+const vector<RGBColor> customColors = {
+	RGBColor(229, 229, 229),
+	RGBColor(255, 127, 127),
+	RGBColor(255, 159, 127),
+	RGBColor(255, 207, 127),
+	RGBColor(239, 255, 127),
+	RGBColor(175, 255, 127),
+	RGBColor(127, 255, 127),
+	RGBColor(127, 255, 178),
+	RGBColor(127, 233, 255),
+	RGBColor(127, 176, 255),
+	RGBColor(127, 136, 255),
+	RGBColor(174, 127, 255),
+	RGBColor(229, 127, 255),
+	RGBColor(255, 127, 208),
+	RGBColor(255, 127, 148),
+	RGBColor(191, 191, 191),
+	RGBColor(255, 89, 89),
+	RGBColor(255, 130, 89),
+	RGBColor(255, 192, 89),
+	RGBColor(234, 255, 89),
+	RGBColor(151, 255, 89),
+	RGBColor(89, 255, 89),
+	RGBColor(89, 255, 155),
+	RGBColor(89, 227, 255),
+	RGBColor(89, 152, 255),
+	RGBColor(89, 100, 255),
+	RGBColor(150, 89, 255),
+	RGBColor(221, 89, 255),
+	RGBColor(255, 89, 194),
+	RGBColor(255, 89, 116),
+	RGBColor(153, 153, 153),
+	RGBColor(255, 50, 50),
+	RGBColor(255, 101, 50),
+	RGBColor(255, 178, 50),
+	RGBColor(229, 255, 50),
+	RGBColor(127, 255, 50),
+	RGBColor(50, 255, 50),
+	RGBColor(50, 255, 132),
+	RGBColor(50, 220, 255),
+	RGBColor(50, 129, 255),
+	RGBColor(50, 64, 255),
+	RGBColor(125, 50, 255),
+	RGBColor(214, 50, 255),
+	RGBColor(255, 50, 180),
+	RGBColor(255, 50, 85),
+	RGBColor(102, 102, 102),
+	RGBColor(255, 0, 0),
+	RGBColor(255, 63, 0),
+	RGBColor(255, 159, 0),
+	RGBColor(223, 255, 0),
+	RGBColor(95, 255, 0),
+	RGBColor(0, 255, 0),
+	RGBColor(0, 255, 102),
+	RGBColor(0, 212, 255),
+	RGBColor(0, 97, 255),
+	RGBColor(0, 17, 255),
+	RGBColor(93, 0, 255),
+	RGBColor(204, 0, 255),
+	RGBColor(255, 0, 161),
+	RGBColor(255, 0, 42),
+	RGBColor(63, 63, 63),
+	RGBColor(178, 0, 0),
+	RGBColor(178, 44, 0),
+	RGBColor(178, 111, 0),
+	RGBColor(156, 178, 0),
+	RGBColor(66, 178, 0),
+	RGBColor(0, 178, 0),
+	RGBColor(0, 178, 71),
+	RGBColor(0, 148, 178),
+	RGBColor(0, 68, 178),
+	RGBColor(0, 11, 178),
+	RGBColor(65, 0, 178),
+	RGBColor(142, 0, 178),
+	RGBColor(178, 0, 113),
+	RGBColor(178, 0, 29),
+	RGBColor(38, 38, 38),
+	RGBColor(102, 0, 0),
+	RGBColor(102, 25, 0),
+	RGBColor(102, 63, 0),
+	RGBColor(89, 102, 0),
+	RGBColor(38, 102, 0),
+	RGBColor(0, 102, 0),
+	RGBColor(0, 102, 40),
+	RGBColor(0, 84, 102),
+	RGBColor(0, 39, 102),
+	RGBColor(0, 6, 102),
+	RGBColor(37, 0, 102),
+	RGBColor(81, 0, 102),
+	RGBColor(102, 0, 64),
+	RGBColor(102, 0, 17),
+	RGBColor(5, 5, 5),
+	RGBColor(51, 0, 0),
+	RGBColor(51, 12, 0),
+	RGBColor(51, 31, 0),
+	RGBColor(44, 51, 0),
+	RGBColor(19, 51, 0),
+	RGBColor(0, 51, 0),
+	RGBColor(0, 51, 20),
+	RGBColor(0, 42, 51),
+	RGBColor(0, 19, 51),
+	RGBColor(0, 3, 51),
+	RGBColor(18, 0, 51),
+	RGBColor(40, 0, 51),
+	RGBColor(51, 0, 32),
+	RGBColor(51, 0, 8),
+};
+
 std::string productNameFromID(int id, std::shared_ptr<GameWrapper> gw)
 {
 	if (id == 0) return "None";
@@ -178,7 +432,6 @@ void Loadout::fromPlugins(int teamNum, std::shared_ptr<CVarManagerWrapper> cv, s
 	for (auto it = loadedPlugins->begin(); it != loadedPlugins->end(); ++it) {
 		auto pName = string((*it)->_details->pluginName);
 		if (pName.compare("AlphaConsole Plugin") == 0) {
-			// TODO: How do we determine AC is up to date and actually doing something?
 			alphaConsoleLoaded = true;
 		}
 		else if (pName.compare("Rainbow car") == 0) {
@@ -210,7 +463,7 @@ std::string Loadout::toBMCode()
 	bmLoadout.body.blueColor.should_override = true; // We can't set the in game paint color, so we'll use the RGB for all cases.
 
 	// Do paints
-	if (primaryPaint.type == BAKKESMOD) { // Assuming accent and primary are BAKKESMOD types, since you currently can't enable/disable them independently.
+	if (primaryPaint.type == BAKKESMOD || primaryPaint.type == IN_GAME) {
 		bmLoadout.body.blueColor.primary_colors = { primaryPaint.r, primaryPaint.g, primaryPaint.b };
 		bmLoadout.body.blueColor.secondary_colors = { accentPaint.r, accentPaint.g, accentPaint.b };
 	}
@@ -517,19 +770,20 @@ void PaintItem::clear()
 	this->itemString = "";
 }
 
-/*void PaintItem::fromPaintId(int paintId, bool isPrimary, TArray<struct FGFxTeamColor> colorSet)
+void PaintItem::fromPaintId(int paintId, bool isPrimary, const vector<RGBColor>& colorSet)
 {
 	int rowLength = isPrimary ? 10 : 15;
-	if (paintId < colorSet.Num()) {
-		auto color = colorSet[paintId].Value;
+	if (paintId < colorSet.size()) {
+		auto color = colorSet.at(paintId);
 
+		this->type = IN_GAME;
 		this->paintId = paintId;
-		this->r = color.R;
-		this->g = color.G;
-		this->b = color.B;
+		this->r = color.r;
+		this->g = color.g;
+		this->b = color.b;
 		this->itemString = "Row: " + to_string((paintId / rowLength) + 1) + ", Col: " + to_string((paintId % rowLength) + 1);
 	}
-}*/
+}
 
 void PaintItem::fromBMPaint(BM::RGB paint)
 {
@@ -629,8 +883,6 @@ void Loadout::assignItemToSlot(unsigned long long id, bool isOnline, std::shared
 
 void Loadout::fromLoadoutWrapper(int teamNum, std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw)
 {
-	// TODO: Figure out how BM exposes paints
-
 	auto iw = gw->GetItemsWrapper();
 	if (iw.IsNull()) {
 		cv->log("ItemsWrapper is NULL. Cannot load loadout.");
@@ -655,8 +907,8 @@ void Loadout::fromLoadoutWrapper(int teamNum, std::shared_ptr<CVarManagerWrapper
 		assignItemToSlot(onlineItems.Get(i), true, cv, gw);
 	}
 
-	primaryPaint.itemString = "Unknown";
-	accentPaint.itemString = "Unknown";
+	primaryPaint.fromPaintId(lw.GetPrimaryPaintColorId(), true, teamNum == 0 ? team0Colors : team1Colors);
+	accentPaint.fromPaintId(lw.GetAccentPaintColorId(), false, customColors);
 }
 
 void Loadout::load(int teamNum, std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw)

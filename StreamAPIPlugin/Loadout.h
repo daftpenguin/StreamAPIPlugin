@@ -12,9 +12,10 @@
 
 enum ItemType {
 	NONE = 0,
-	BAKKESMOD = 1,
-	ALPHA_CONSOLE = 2,
-	RAINBOW_PLUGIN = 3,
+	IN_GAME = 1,
+	BAKKESMOD = 2,
+	ALPHA_CONSOLE = 3,
+	RAINBOW_PLUGIN = 4,
 };
 
 // TODO: Replace these by using PaintDatabase and CertifiedStatDatabase
@@ -31,6 +32,18 @@ const std::vector<std::string> PaintToString = {
 
 // Esports DB team name for G2 seems to return just "G2" and not "G2 Esports"
 const std::unordered_set<std::string> TeamAppendEsports = { "G2" };
+
+struct RGBColor {
+	uint8_t r;
+	uint8_t g;
+	uint8_t b;
+
+	RGBColor(uint8_t r, uint8_t g, uint8_t b) {
+		this->r = r;
+		this->g = g;
+		this->b = b;
+	}
+};
 
 struct LoadoutItem {
 	ItemType type = NONE;
@@ -64,7 +77,7 @@ struct PaintItem {
 	std::string itemString;
 
 	void clear();
-	//void fromPaintId(int paintId, bool isPrimary);
+	void fromPaintId(int paintId, bool isPrimary, const std::vector<RGBColor>& colorSet);
 	void fromBMPaint(BM::RGB paint);
 	void fromRainbowPlugin(std::shared_ptr<CVarManagerWrapper> cvarManager, bool isPrimary);
 	std::string toString(bool isPrimary);
