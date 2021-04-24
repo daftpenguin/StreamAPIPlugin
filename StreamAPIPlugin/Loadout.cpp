@@ -537,7 +537,7 @@ std::string Loadout::getItemString(std::string itemType, std::string outputSepar
 			<< "\"engine audio\":" << quoted(engineAudio.toString()) << ","
 			<< "\"antenna\":" << quoted(antenna.toString()) << ","
 			<< "\"topper\":" << quoted(topper.toString()) << ","
-			<< "\"bm code\":" << toBMCode() << "}";
+			<< "\"bm code\":" << quoted(toBMCode()) << "}";
 		return oss.str();
 	}
 
@@ -848,7 +848,8 @@ void Loadout::assignItemToSlot(unsigned long long id, bool isOnline, std::shared
 	if (isOnline) {
 		auto onlineProduct = iw.GetOnlineProduct(id);
 		if (!onlineProduct.IsNull()) {
-			pw = &onlineProduct.GetProduct();
+			auto product = onlineProduct.GetProduct();
+			pw = &product;
 		}		
 	}
 	

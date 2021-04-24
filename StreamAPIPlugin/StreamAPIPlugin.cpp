@@ -1,8 +1,13 @@
 #include "StreamAPIPlugin.h"
 
 #include <fstream>
+#include <cstdlib>
+#include <iostream>
+#include <string>
+#include <filesystem>
 
 using namespace std;
+namespace fs = std::filesystem;
 
 #define DEFAULT_SERVER_PORT "10111"
 #define DEFAULT_BUFLEN 512
@@ -18,7 +23,6 @@ BAKKESMOD_PLUGIN(StreamAPIPlugin, "Stream API Plugin", plugin_version, PLUGINTYP
 std::shared_ptr<CVarManagerWrapper> _globalCvarManager;
 int _globalBMVersion = 0;
 
-// TODO: external chat bot support
 
 void StreamAPIPlugin::onLoad()
 {
@@ -38,6 +42,13 @@ void StreamAPIPlugin::onLoad()
 			cvarManager->log("Failed to read BakkesMod version from version.txt. Plugin will not work.");
 		}
 	}
+
+	cvarManager->registerNotifier("streamapi_reload_token", [this](vector<string> params) {
+		webSocket.loadTokenFromFile(gameWrapper->GetBakkesModPath() / "data" / "streamapi" / "token.txt");
+		if (useWebSocket) {
+			webSocket.start();
+		}
+		}, "Reloads token from file", PERMISSION_ALL);
 	
 	gameWrapper->HookEventWithCaller<ServerWrapper>("Function TAGame.CarPreviewActor_TA.SetTeamIndex", [this](ServerWrapper sw, void* params, string eventName) {
 		struct SetLoadoutSetParams {
@@ -55,23 +66,61 @@ void StreamAPIPlugin::onLoad()
 
 	cvarManager->registerCvar("streamapi_gray_port", "false", "", false, true, 0, true, 1, false);
 
+	// TODO: We should probably be a little bit more careful with this. Store it in a separate file? Refresh tokens every once in awhile?
+	auto tokenVar = cvarManager->registerCvar("streamapi_token", "", "Token for streamapi plugin", false, false, 0, false, 0, true);
+	webSocket.setToken(tokenVar.getStringValue());
 	auto portVar = cvarManager->registerCvar("streamapi_port", DEFAULT_SERVER_PORT, "Port for HTTP API to listen for requests", true, true, 1024, true, 49151, true);
 	serverPort = portVar.getIntValue();
-	httpThread = std::thread(&StreamAPIPlugin::runHttpServer, this, serverPort);
+	auto useWebSocketVar = cvarManager->registerCvar("streamapi_use_external_bot", "0", "Pushes data to external API to be called from external bots", true, true, 0, true, 1, true);
+	useWebSocket = useWebSocketVar.getBoolValue();
+
+	webSocket.loadTokenFromFile(gameWrapper->GetBakkesModPath() / "data" / "streamapi" / "token.txt");
+	if (useWebSocket) {
+		cvarManager->log("Starting web socket");
+		webSocket.start();
+	} else {
+		httpThread = std::thread(&StreamAPIPlugin::runHttpServer, this, serverPort);
+	}
 
 	portVar.addOnValueChanged([this](std::string, CVarWrapper cvar) {
-		cvarManager->log("Restarting HTTP API server on new port");
 		serverPort = cvar.getIntValue();
 		if (serverPort < 1024 || serverPort > 49151) {
 			serverPort = runningServerPort;
 			return;
 		}
 
-		httpServer.stop();
-		httpThread.join();
-
-		httpThread = std::thread(&StreamAPIPlugin::runHttpServer, this, serverPort);
+		if (!useWebSocket) {
+			cvarManager->log("Restarting HTTP API server on new port");
+			httpServer.stop();
+			httpThread.join();
+			httpThread = std::thread(&StreamAPIPlugin::runHttpServer, this, serverPort);
+		}
 	});
+
+	useWebSocketVar.addOnValueChanged([this](std::string, CVarWrapper cvar) {
+		bool wasWebSocket = useWebSocket;
+		useWebSocket = cvar.getBoolValue();
+		if (useWebSocket && !wasWebSocket) {
+			cvarManager->log("Starting web socket and stopping HTTP API server");
+			httpServer.stop();
+			httpThread.join();
+			webSocket.start();
+		} else if (!useWebSocket && wasWebSocket) {
+			cvarManager->log("Starting HTTP API server and stopping web socket");
+			webSocket.stop();
+			httpThread = std::thread(&StreamAPIPlugin::runHttpServer, this, serverPort);
+		}
+	});
+
+	tokenVar.addOnValueChanged([this](std::string, CVarWrapper cvar) {
+		webSocket.setToken(cvar.getStringValue());
+		if (useWebSocket) {
+			webSocket.start();
+		}
+	});
+
+	trainingPackStr = "No training pack";
+	webSocket.setData("training", trainingPackStr);
 
 	getLoadout();
 	getSens();
@@ -80,7 +129,14 @@ void StreamAPIPlugin::onLoad()
 	getVideo();
 	getTrainingPack();
 	ranks.getRanks(gameWrapper);
-	gameWrapper->GetMMRWrapper().RegisterMMRNotifier([this](UniqueIDWrapper id) { if (id == gameWrapper->GetUniqueID()) ranks.updateRank(gameWrapper); });
+	cvarManager->log("Ranks: " + ranks.toString("json", cvarManager));
+	webSocket.setData("rank", ranks.toString("json", cvarManager));
+	gameWrapper->GetMMRWrapper().RegisterMMRNotifier([this](UniqueIDWrapper id) {
+		if (id == gameWrapper->GetUniqueID()) {
+			ranks.updateRank(gameWrapper);
+			webSocket.setData("rank", ranks.toString("json", cvarManager));
+		}
+		});
 	gameWrapper->SetTimeout([this](GameWrapper* gw) { // Doesn't appear to update when ranks are initially retrieved
 		ranks.getRanks(gameWrapper);
 		}, 10.0f);
@@ -105,9 +161,15 @@ void StreamAPIPlugin::onLoad()
 
 void StreamAPIPlugin::onUnload()
 {
-	cvarManager->log("Stopping HTTP API server");
-	httpServer.stop();
-	httpThread.join();
+	if (useWebSocket) {
+		cvarManager->log("Stopping web socket");
+		webSocket.stop();
+	}
+	else {
+		cvarManager->log("Stopping HTTP API server");
+		httpServer.stop();
+		httpThread.join();
+	}
 }
 
 void StreamAPIPlugin::getLoadout()
@@ -126,13 +188,19 @@ void StreamAPIPlugin::getLoadout()
 		}
 	}
 
+	string loadoutStr = this->loadout.toString();
 	this->loadout.clear();
 	this->loadout.load(teamNum, cvarManager, gameWrapper);
+	if (loadoutStr.compare(this->loadout.toString()) != 0) {
+		webSocket.setData("loadout", this->loadout.getItemString("json", ",", true, true));
+	}
 }
 
 void StreamAPIPlugin::getSens()
 {
 	cvarManager->log("Updating sens");
+
+	string oldSensStr = sensStr;
 
 	stringstream oss;
 	oss.precision(2);
@@ -144,11 +212,17 @@ void StreamAPIPlugin::getSens()
 		<< outputSeparator << "Deadzone: " << gp.ControllerDeadzone
 		<< outputSeparator << "Dodge Deadzone: " << gp.DodgeInputThreshold;
 	sensStr = oss.str();
+
+	if (sensStr.compare(oldSensStr) != 0) {
+		webSocket.setData("sens", sensStr);
+	}
 }
 
 void StreamAPIPlugin::getCamera()
 {
 	cvarManager->log("Updating camera");
+
+	string oldCameraStr = cameraStr;
 
 	stringstream oss;
 	oss.precision(2);
@@ -161,6 +235,10 @@ void StreamAPIPlugin::getCamera()
 		<< outputSeparator << "Swivel: " << camera.SwivelSpeed
 		<< outputSeparator << "Transition: " << camera.TransitionSpeed;
 	cameraStr = oss.str();
+
+	if (cameraStr.compare(oldCameraStr) != 0) {
+		webSocket.setData("camera", cameraStr);
+	}
 }
 
 std::map<std::string, std::string> antiAliasValueToName({
@@ -192,6 +270,8 @@ std::map<std::string, std::string> videoOptionsRename({
 void StreamAPIPlugin::getVideo()
 {
 	cvarManager->log("Updating video settings");
+
+	string oldVideoStr = videoStr;
 
 	auto settings = gameWrapper->GetSettings().GetVideoSettings();
 
@@ -231,9 +311,13 @@ void StreamAPIPlugin::getVideo()
 	
 	videoStr = oss.str();
 	videoStr = videoStr.substr(0, videoStr.size() - outputSeparator.size()) + " (not all settings suppported yet)";
+
+	if (videoStr.compare(oldVideoStr) != 0) {
+		webSocket.setData("video", videoStr);
+	}
 }
 
-unordered_map<string, string> ds4Renames({
+unordered_map<string, string> xboxRenames({
 	{ "XboxTypeS_A", "Cross" },
 	{ "XboxTypeS_B", "Circle" },
 	{ "XboxTypeS_X", "Square" },
@@ -256,7 +340,7 @@ unordered_map<string, string> ds4Renames({
 	{ "XboxTypeS_RightThumbStick", "R3" },
 	});
 
-unordered_map<string, string> xboxRenames({
+unordered_map<string, string> ds4Renames({
 	{ "XboxTypeS_A", "A" },
 	{ "XboxTypeS_B", "B" },
 	{ "XboxTypeS_X", "X" },
@@ -351,9 +435,54 @@ const unordered_map<string, string> defaultGamepadBindings({
 	{ "AutoSaveReplay", "XboxTypeS_Back" },
 	{ "UsePickup", "XboxTypeS_LeftThumbStick" },
 	{ "NextPickup", "XboxTypeS_RightShoulder" },
+	{ "ResetMouseCenter", "None" },
+	{ "MouseSteerLeft", "None" },
+	{ "MouseSteerRight", "None" },
+	{ "MouseThrottleReverse", "None" },
+	{ "MouseThrottleForward", "None" },
 	});
 
-const unordered_map<string, string> defaultPCBindings;
+const unordered_map<string, string> defaultPCBindings({
+	{ "ThrottleForward", "W" },
+	{ "ThrottleReverse", "S" },
+	{ "SteerRight", "D" },
+	{ "SteerLeft", "A" },
+	{ "LookUp", "MouseY" },
+	{ "LookDown", "MouseY" },
+	{ "LookRight", "MouseX" },
+	{ "LookLeft", "MouseX" },
+	{ "YawRight", "D" },
+	{ "YawLeft", "A" },
+	{ "PitchUp", "S" },
+	{ "PitchDown", "W" },
+	{ "RollRight", "E" },
+	{ "RollLeft", "Q" },
+	{ "Boost", "LeftMouseButton" },
+	{ "Jump", "RightMouseButton" },
+	{ "Handbrake", "LeftShift" },
+	{ "SecondaryCamera", "SpaceBar" },
+	{ "ToggleRoll", "LeftShift" },
+	{ "RearCamera", "MiddleMouseButton" },
+	{ "UsePickup", "R" },
+	{ "NextPickup", "C" },
+	{ "ToggleScoreboard", "Tab" },
+	{ "ChatPreset1", "One" },
+	{ "ChatPreset2", "Two" },
+	{ "ChatPreset3", "Three" },
+	{ "ChatPreset4", "Four" },
+	{ "ResetTraining", "BackSpace" },
+	{ "AutoSaveReplay", "None" },
+	{ "MouseSteerLeft", "None" },
+	{ "MouseSteerRight", "None" },
+	{ "MouseThrottleReverse", "None" },
+	{ "MouseThrottleForward", "None" },
+	{ "PushToTalk", "None" },
+	{ "SwivelLeft", "None" },
+	{ "SwivelRight", "None" },
+	{ "SwivelDown", "None" },
+	{ "SwivelUp", "None" },
+	{ "ResetMouseCenter", "None" },
+	});
 
 enum INPUT_TYPE {
 	DS4 = 0,
@@ -373,12 +502,12 @@ std::string generateBindingsStr(const vector<pair<string, string>>& bindings, un
 
 	int changes = 0;
 	for (auto binding : bindings) {
+		//ods << "\n{ \"" << binding.second << "\", \"" << binding.first << "\" },";
+
 		// Only get actions within actionRenames
 		auto actionIt = actionRenames.find(binding.second);
 		if (actionIt == actionRenames.end()) continue;
 		auto action = actionIt->second;
-
-		//ods << "\n{ \"" << binding.second << "\", \"" << binding.first << "\" },";
 
 		// Ignore default bindings
 		auto def = defaultBindings.find(binding.second);
@@ -399,7 +528,7 @@ std::string generateBindingsStr(const vector<pair<string, string>>& bindings, un
 		isFirst = false;
 	}
 
-	//_globalCvarManager->log(ods.str());
+	//_globalCvarManager->log("1" + ods.str());
 
 	if (changes == 0) {
 		return "Default bindings";
@@ -412,6 +541,9 @@ void StreamAPIPlugin::getBindings()
 {
 	cvarManager->log("Updating bindings");
 
+	string oldGamepadStr = ds4BindingsStr;
+	string oldKbmStr = kbmBindingsStr;
+
 	if (gameWrapper->GetSettings().GetAllGamepadBindings().size() == 0) {
 		ds4BindingsStr = generateBindingsStr(gameWrapper->GetSettings().GetAllPCBindings(), &ds4Renames, defaultGamepadBindings, outputSeparator, ": ");
 		xboxBindingsStr = generateBindingsStr(gameWrapper->GetSettings().GetAllPCBindings(), &xboxRenames, defaultGamepadBindings, outputSeparator, ": ");
@@ -421,6 +553,11 @@ void StreamAPIPlugin::getBindings()
 		ds4BindingsStr = generateBindingsStr(gameWrapper->GetSettings().GetAllGamepadBindings(), &ds4Renames, defaultGamepadBindings, outputSeparator, ": ");
 		xboxBindingsStr = generateBindingsStr(gameWrapper->GetSettings().GetAllGamepadBindings(), &xboxRenames, defaultGamepadBindings, outputSeparator, ": ");
 		kbmBindingsStr = generateBindingsStr(gameWrapper->GetSettings().GetAllPCBindings(), nullptr, defaultPCBindings, outputSeparator, ": ");
+	}
+
+	if (ds4BindingsStr.compare(oldGamepadStr) != 0 || kbmBindingsStr.compare(oldKbmStr) == 0) {
+		webSocket.setData("bindings",
+			"{\"ds4\":\"" + ds4BindingsStr + "\",\"xbox\":\"" + xboxBindingsStr + "\",\"kbm\":\"" + kbmBindingsStr + "\"}");
 	}
 }
 
@@ -469,6 +606,8 @@ void StreamAPIPlugin::getTrainingPack()
 			<< to_string(te.GetTotalRounds())
 			<< " drills): " << code.ToString();
 		trainingPackStr = oss.str();
+
+		webSocket.setData("training", trainingPackStr);
 
 		}, 1.0f);
 }

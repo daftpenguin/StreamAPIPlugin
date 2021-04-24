@@ -8,6 +8,7 @@
 #include "version.h"
 #include "Loadout.h"
 #include "Ranks.h"
+#include "WebSocket.h"
 
 #include <string>
 #include <vector>
@@ -74,7 +75,7 @@ private:
 	std::string ds4BindingsStr;
 	std::string xboxBindingsStr;
 	std::string videoStr;
-	std::string trainingPackStr = "No training pack";
+	std::string trainingPackStr;
 	Ranks ranks;
 
 private:
@@ -103,4 +104,9 @@ private:
 	std::string outputSeparator = " | ";
 	bool showSlotName = true;
 	bool showBMCode = true;
+
+private:
+	/* WebSocket */
+	bool useWebSocket;
+	WebSocket webSocket;
 };

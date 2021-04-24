@@ -52,7 +52,6 @@ unordered_set<StreamAPIPlaylist> casualPlaylists({
 vector<StreamAPIPlaylist> playlistsToRetrieve({
 	PLAYLIST_RANKEDDUEL,
 	PLAYLIST_RANKEDDOUBLES,
-	PLAYLIST_RANKEDSOLOSTANDARD,
 	PLAYLIST_RANKEDSTANDARD,
 	PLAYLIST_RANKEDHOOPS,
 	PLAYLIST_RANKEDRUMBLE,
@@ -149,17 +148,37 @@ std::string Ranks::toString(std::string args, std::shared_ptr<CVarManagerWrapper
 	stringstream oss;
 
 	if (args.empty()) {
+		bool isFirst = true;
 		for (auto playlistId : playlistsToRetrieve) {
 			auto it = ranks.find(playlistId);
 			if (it != ranks.end()) {
-				oss << it->second << ", ";
+				if (!isFirst) oss << ", ";
+				oss << it->second;
+				isFirst = false;
 			}
 		}
+	}
+	else if (args.compare("json") == 0) {
+		// This is ugly but we're actually going to be pushing the json like { "1v1": "1v1: Champion 2 Div 3 (420)", ... }
+		oss << "{";
+		bool isFirst = true;
+		for (auto playlistId : playlistsToRetrieve) {
+			auto playlistName = PlaylistIdToName[playlistId == casualRetrievalPlaylist ? PLAYLIST_CASUAL : playlistId];
+
+			auto it = ranks.find(playlistId);
+			if (it != ranks.end()) {
+				if (!isFirst) oss << ",";
+				oss << "\"" << boost::to_lower_copy(playlistName) << "\":\"" << it->second << "\"";
+				isFirst = false;
+			}
+		}
+		oss << "}";
 	}
 	else {
 		vector<StreamAPIPlaylist> playlists;
 		stringstream iss(args);
 
+		bool isFirst = true;
 		while (iss.good()) {
 			string playlist;
 			getline(iss, playlist, ',');
@@ -183,10 +202,11 @@ std::string Ranks::toString(std::string args, std::shared_ptr<CVarManagerWrapper
 				return "Failed to get rank for playlist: " + PlaylistIdToName[playlistId] + ". If this keeps happening, someone please whisper DaftPenguin on Twitch. Thanks :)";
 			}
 
-			oss << ranks[playlistId] << ", ";
+			if (!isFirst) oss << ", ";
+			oss << ranks[playlistId];
+			isFirst = false;
 		}
 	}
 
-	auto output = oss.str();
-	return output.substr(0, output.size() - 2);
+	return oss.str();
 }
