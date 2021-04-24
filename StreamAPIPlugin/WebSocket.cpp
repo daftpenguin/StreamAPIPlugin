@@ -5,26 +5,12 @@
 
 #include "WebSocket.h"
 #include "StreamAPIPlugin.h"
-
-/*
-#include <boost/beast/core.hpp>
-#include <boost/beast/websocket.hpp>
-#include <boost/asio/connect.hpp>
-#include <boost/asio/ip/tcp.hpp>
-#include <boost/beast/ssl.hpp>
-#include <boost/asio/ssl/stream.hpp>
-
-namespace beast = boost::beast;
-namespace http = beast::http;
-namespace websocket = beast::websocket;
-namespace net = boost::asio;
-namespace ssl = boost::asio::ssl;
-using tcp = boost::asio::ip::tcp;
-*/
+#include "nlohmann/json.hpp"
 
 using namespace std;
 using namespace websocketpp::lib;
 namespace fs = std::filesystem;
+using json = nlohmann::ordered_json;
 
 WebSocket::WebSocket() : isRunning(false), token(""), status(WebSocketStatus::STOPPED), stopSocket(false), someDataIsDirty(false)
 {
@@ -39,29 +25,48 @@ WebSocket::WebSocket() : isRunning(false), token(""), status(WebSocketStatus::ST
 	srand(time(NULL));
 }
 
-void WebSocket::setToken(std::string token)
+void WebSocket::init(std::filesystem::path tokenFile)
 {
-	this->token = token;
+	this->tokenFile = tokenFile;
+	setStatus(WebSocketStatus::DISCONNECTED, "Disconnected", "");
+}
+
+bool WebSocket::setToken(std::string token)
+{
+	if (verifyToken(token)) {
+		ofstream fout(tokenFile);
+		if (fout.is_open()) {
+			fout << token;
+			fout.close();
+			this->token = token;
+			return true;
+		}
+		return false;
+	}
+	setStatus(WebSocketStatus::BAD_TOKEN, "Stopped", "Bad token configured");
+	return false;
 }
 
 void WebSocket::start()
 {
-	if (isRunning) {
-		stop();
-	}
+	lock_guard<mutex> lock(stopStartLock);
+	internalStop();
 
 	if (token.empty()) {
-		setStatus(WebSocketStatus::STOPPED, "Stopped. Must configure token.", "");
+		setStatus(WebSocketStatus::STOPPED, "Stopped", "Must configure token");
 		return;
 	}
-
 	
-	stopSocket = false;
-	isRunning = true;
 	thread = std::thread(&WebSocket::run, this);
 }
 
 void WebSocket::stop()
+{
+	lock_guard<mutex> lock(stopStartLock);
+	internalStop();
+}
+
+void WebSocket::internalStop()
 {
 	if (isRunning) {
 		{
@@ -101,8 +106,9 @@ void WebSocket::loadTokenFromFile(std::filesystem::path fpath)
 			while (getline(fin, line)) {
 				tokenSS << line;
 			}
-			setToken(tokenSS.str());
-			_globalCvarManager->log("WebSocket: token loaded from file");
+			if (setToken(tokenSS.str())) {
+				_globalCvarManager->log("WebSocket: token loaded from file");
+			}
 		}
 	}
 	else {
@@ -110,8 +116,21 @@ void WebSocket::loadTokenFromFile(std::filesystem::path fpath)
 	}
 }
 
+bool WebSocket::verifyToken(std::string token)
+{
+	try {
+		json j = json::parse(token);
+		return !(j.find("user") == j.end() || j.find("email") == j.end() || j.find("platform") == j.end() || j.find("token") == j.end());
+	}
+	catch (...) {
+		return false;
+	}
+}
+
 void WebSocket::run()
 {
+	stopSocket = false;
+	isRunning = true;
 	float reconnectDelay = 1.0;
 
 #ifdef WEBSOCKET_DEBUG
@@ -134,7 +153,7 @@ void WebSocket::run()
 			client::connection_ptr con = c.get_connection(uri, ec);
 			if (ec) {
 				setStatus(WebSocketStatus::FAILED, "Failed to create connection.", ec.message());
-				return;
+				break;
 			}
 
 			con->set_open_handler(bind(&WebSocket::on_open, this, &c, placeholders::_1));
@@ -180,7 +199,6 @@ void WebSocket::run()
 
 		_globalCvarManager->log("Locking for reconnection wait");
 		std::unique_lock<std::mutex> lck(dataMutex);
-		_globalCvarManager->log("stopSocket: " + to_string(stopSocket) + ", " + "AuthenticationFailed: " + to_string(status == WebSocketStatus::AUTHENTICATION_FAILED));
 		if (!stopSocket && status != WebSocketStatus::AUTHENTICATION_FAILED) {
 			int ms = reconnectDelay * 1000 + (rand() % 1000);
 			if (reconnectDelay < WEBSOCKET_MAX_BACKOFF_SECS) {
@@ -190,15 +208,30 @@ void WebSocket::run()
 			cv.wait_for(lck, std::chrono::milliseconds(ms));
 		}
 	}
-	isRunning = false;
+}
+
+std::string& WebSocket::getStatus()
+{
+	stringstream oss;
+	{
+		lock_guard<mutex> lock(statusLock);
+		oss << this->statusMsg;
+		if (!reason.empty()) oss << ". Reason: " << reason;
+	}
+	fullStatusMsg = oss.str();
+	return fullStatusMsg;
 }
 
 void WebSocket::setStatus(WebSocketStatus status, std::string statusMsg, std::string reason)
 {
-	this->status = status;
-	this->statusMsg = statusMsg;
-	if (!reason.empty()) {
+	{
+		lock_guard<mutex> lock(statusLock);
+		this->status = status;
+		this->statusMsg = statusMsg;
 		this->reason = reason;
+	}
+
+	if (!reason.empty()) {
 		_globalCvarManager->log("WebSocket: " + statusMsg + ". Reason: " + reason);
 	}
 	else {
@@ -261,7 +294,7 @@ void WebSocket::on_message(websocketpp::connection_hdl, client::message_ptr msg)
 		}
 	}
 	else if (status == WebSocketStatus::AUTHENTICATING) {
-		setStatus(WebSocketStatus::AUTHENTICATED, "Authenticated", "");
+		setStatus(WebSocketStatus::AUTHENTICATED, "Connected", "");
 		cv.notify_one();
 	}
 }

@@ -35,6 +35,7 @@ typedef websocketpp::lib::shared_ptr<websocketpp::lib::asio::ssl::context> conte
 //#define WEBSOCKET_NO_UPDATES_UNTIL_PING 5
 
 enum class WebSocketStatus {
+	BAD_TOKEN,
 	STOPPED,
 	CONNECTING,
 	AUTHENTICATING,
@@ -48,17 +49,23 @@ class WebSocket
 {
 public:
 	WebSocket();
-	void setToken(std::string token);
+	bool setToken(std::string token);
 	void start();
 	void stop();
 	void setData(std::string fieldName, std::string data);
+	void init(std::filesystem::path tokenFile);
 	void loadTokenFromFile(std::filesystem::path fpath);
+	bool verifyToken(std::string token);
+	std::string& getStatus();
 
 private:
+	void internalStop();
 	void run();
 	void setStatus(WebSocketStatus status, std::string statusMsg, std::string reason);
 	void setAllDataDirty();
 	std::string waitForData();
+
+	std::mutex stopStartLock;
 
 	std::mutex dataMutex;
 	std::condition_variable cv;
@@ -67,13 +74,16 @@ private:
 	bool someDataIsDirty;
 	std::unordered_map<std::string, WebSocketDataField> data;
 
-	std::string statusMsg;
 	std::string reason;
 	std::thread thread;
 	std::string token;
+	std::filesystem::path tokenFile;
 
-	/* WebSocket stuff */
-	std::atomic<WebSocketStatus> status;
+	std::mutex statusLock;
+	WebSocketStatus status;
+	std::string statusMsg;
+	std::string fullStatusMsg;
+
 	websocketpp::connection_hdl hdl;
 
 	void on_message(websocketpp::connection_hdl, client::message_ptr msg);

@@ -5,10 +5,12 @@
 
 #include "cpp-httplib/httplib.h"
 #include "bakkesmod/plugin/bakkesmodplugin.h"
+#include "bakkesmod/plugin/PluginSettingsWindow.h"
 #include "version.h"
 #include "Loadout.h"
 #include "Ranks.h"
 #include "WebSocket.h"
+#include "imgui/imgui.h"
 
 #include <string>
 #include <vector>
@@ -54,12 +56,14 @@ void LOG(const S& format_str, Args&&... args)
 	_globalCvarManager->log(fmt::format(format_str, args...));
 }
 
-class StreamAPIPlugin : public BakkesMod::Plugin::BakkesModPlugin
+class StreamAPIPlugin : public BakkesMod::Plugin::BakkesModPlugin, public BakkesMod::Plugin::PluginSettingsWindow
 {
 	virtual void onLoad();
 	virtual void onUnload();
 
 private:
+	void toggleBotSupport();
+
 	void getLoadout();
 	void getSens();
 	void getCamera();
@@ -83,8 +87,9 @@ private:
 
 private:
 	/* Http Server */
+	// TODO: Wrap this up in a class like WebSocket
 	int serverPort;
-	int runningServerPort;
+	std::string serverStatus;
 	httplib::Server httpServer;
 	std::thread httpThread;
 	void runHttpServer(int port);
@@ -108,5 +113,17 @@ private:
 private:
 	/* WebSocket */
 	bool useWebSocket;
+	std::filesystem::path tokenFile;
 	WebSocket webSocket;
+
+private:
+	ImGuiContext* imguiCtx = nullptr;
+	char guiServerPort[6];
+	bool guiShowBadToken = false;
+	std::string guiWebSocketStatus;
+	std::chrono::system_clock::time_point guiWebSocketStatusLastChecked;
+
+	void RenderSettings();
+	std::string GetPluginName();
+	void SetImGuiContext(uintptr_t ctx);
 };
