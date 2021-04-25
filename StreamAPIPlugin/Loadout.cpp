@@ -649,13 +649,16 @@ void LoadoutItem::fromItem(unsigned long long id, bool isOnline, std::shared_ptr
 	// I really don't know diff between products and online products, so this might be a dumb way of doing things...
 	if (isOnline) {
 		auto onlineProduct = iw.GetOnlineProduct(id);
-		if (onlineProduct.IsNull()) return;
-
-		this->productId = onlineProduct.GetProductID();
-		this->itemString = onlineProduct.GetLongLabel().ToString();
-		handleAttributes(onlineProduct.GetAttributes(), gw);
+		if (onlineProduct.IsNull()) {
+			isOnline = false;
+		} else {
+			this->productId = onlineProduct.GetProductID();
+			this->itemString = onlineProduct.GetLongLabel().ToString();
+			handleAttributes(onlineProduct.GetAttributes(), gw);
+		}
 	}
-	else {
+
+	if (!isOnline) {
 		auto product = iw.GetProduct(id);
 		if (product.IsNull()) return;
 
@@ -914,6 +917,8 @@ void Loadout::fromLoadoutWrapper(int teamNum, std::shared_ptr<CVarManagerWrapper
 
 	primaryPaint.fromPaintId(lw.GetPrimaryPaintColorId(), true, teamNum == 0 ? team0Colors : team1Colors);
 	accentPaint.fromPaintId(lw.GetAccentPaintColorId(), false, customColors);
+	primaryFinish.fromItem(lw.GetPrimaryFinishId(), false, gw);
+	accentFinish.fromItem(lw.GetAccentFinishId(), false, gw);
 }
 
 void Loadout::cleanUpStandardItems()
@@ -928,6 +933,7 @@ void Loadout::cleanUpStandardItems()
 void Loadout::load(int teamNum, std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw)
 {
 	fromLoadoutWrapper(teamNum, cv, gw);
+	_globalCvarManager->log("DECAL: " + this->decal.toString());
 	fromBakkesMod(teamNum, cv, gw);
 	cleanUpStandardItems();
 	fromPlugins(teamNum, cv, gw);

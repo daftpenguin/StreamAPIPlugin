@@ -188,7 +188,9 @@ void StreamAPIPlugin::getLoadout()
 	this->loadout.clear();
 	this->loadout.load(teamNum, cvarManager, gameWrapper);
 	if (loadoutStr.compare(this->loadout.toString()) != 0) {
-		webSocket.setData("loadout", this->loadout.getItemString("json", ",", true, true));
+		auto ls = this->loadout.getItemString("json", ",", true, true);
+		cvarManager->log(ls);
+		webSocket.setData("loadout", ls);
 	}
 }
 

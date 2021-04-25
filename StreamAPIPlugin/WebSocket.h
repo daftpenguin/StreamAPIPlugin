@@ -31,8 +31,6 @@ typedef websocketpp::lib::shared_ptr<websocketpp::lib::asio::ssl::context> conte
 #define WEBSOCKET_LOCAL_SERVER_PORT "9001"
 #define WEBSOCKET_PATH "/api/rocket-league/stream-api/ws"
 #define WEBSOCKET_MAX_BACKOFF_SECS 64
-#define WEBSOCKET_SLEEP_MSECS 5000
-//#define WEBSOCKET_NO_UPDATES_UNTIL_PING 5
 
 enum class WebSocketStatus {
 	BAD_TOKEN,

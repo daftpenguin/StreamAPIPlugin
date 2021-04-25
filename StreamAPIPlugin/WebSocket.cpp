@@ -52,7 +52,9 @@ bool WebSocket::setToken(std::string token)
 				this->token = token;
 				return true;
 			}
-			_globalCvarManager->log("Failed to open token file. Cannot save token to be reloaded after restart.");
+			else {
+				_globalCvarManager->log("Failed to open token file. Cannot save token to be reloaded after restart.");
+			}
 		}
 		return false;
 	}
