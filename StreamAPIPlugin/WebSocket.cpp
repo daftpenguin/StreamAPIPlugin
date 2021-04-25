@@ -120,7 +120,13 @@ bool WebSocket::verifyToken(std::string token)
 {
 	try {
 		json j = json::parse(token);
-		return !(j.find("user") == j.end() || j.find("email") == j.end() || j.find("platform") == j.end() || j.find("token") == j.end());
+		bool valid = !(j.find("user") == j.end() || j.find("email") == j.end() || j.find("platform") == j.end() || j.find("token") == j.end());
+		if (valid) {
+			username = j.at("user").get<string>();
+			platform = j.at("platform").get<string>();
+			_globalCvarManager->log("WebSocket: From token: User: " + username + ", Platform: " + platform);
+		}
+		return valid;
 	}
 	catch (...) {
 		return false;

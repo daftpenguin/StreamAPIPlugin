@@ -22,6 +22,11 @@ void StreamAPIPlugin::RenderSettings()
 			cvarManager->executeCommand("streamapi_port " + string(guiServerPort));
 		}
 		ImGui::TextWrapped("Status: %s", serverStatus);
+
+		if (ImGui::Button("Open Local API (in browser)")) {
+			wstring url = L"http://127.0.0.1:" + to_wstring(serverPort) + L"/cmd?cmd=loadout";
+			ShellExecute(0, 0, url.c_str(), 0, 0, SW_SHOW);
+		}
 	}
 
 	ImGui::Separator();
@@ -39,6 +44,7 @@ void StreamAPIPlugin::RenderSettings()
 		if (ImGui::Button("Open Setup Website (in browser)")) {
 			ShellExecute(0, 0, L"https://www.daftpenguin.com/rocket-league/stream-api/setup", 0, 0, SW_SHOW);
 		}
+		ImGui::TextWrapped("If button doesn't work for some reason: https://www.daftpenguin.com/rocket-league/stream-api/setup");
 
 		if (ImGui::Button("Paste Token")) {
 			auto guiWebSocketToken = ImGui::GetClipboardText();
@@ -60,13 +66,20 @@ void StreamAPIPlugin::RenderSettings()
 			ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_PlotLinesHovered), "Last pasted token failed verification and was not set. Please try again.");
 		}
 
-		/*auto now = std::chrono::system_clock::now();
-		if (now - guiWebSocketStatusLastChecked > std::chrono::seconds(1)) {
+		auto now = std::chrono::system_clock::now();
+		if (now - guiWebSocketStatusLastChecked > std::chrono::milliseconds(200)) {
 			guiWebSocketStatus = webSocket.getStatus();
 			guiWebSocketStatusLastChecked = now;
-		}*/
-		guiWebSocketStatus = webSocket.getStatus();
+		}
 		ImGui::TextWrapped("Status: %s", guiWebSocketStatus.c_str());
+
+		if (ImGui::Button("Open External API (in browser)")) {
+			wstring username, platform;
+			username.assign(webSocket.username.begin(), webSocket.username.end());
+			platform.assign(webSocket.platform.begin(), webSocket.platform.end());
+			wstring url = L"https://www.daftpenguin.com/api/rocket-league/stream-api/data/" + platform + L"/" + username + L"?cmd=loadout";
+			ShellExecute(0, 0, url.c_str(), 0, 0, SW_SHOW);
+		}
 	}
 
 	ImGui::Separator();

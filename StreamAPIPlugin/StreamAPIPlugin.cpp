@@ -29,7 +29,9 @@ void StreamAPIPlugin::onLoad()
 	_globalCvarManager = cvarManager;
 	tokenFile = gameWrapper->GetBakkesModPath() / "data" / "streamapi" / "token.txt";
 	webSocket.init(tokenFile);
+	webSocket.loadTokenFromFile(tokenFile);
 	guiWebSocketStatusLastChecked = std::chrono::system_clock::now();
+	configureHttpServer();
 	
 	cvarManager->registerNotifier("streamapi_dump", bind(&StreamAPIPlugin::onDump, this, std::placeholders::_1), "dumps loadout data to console", PERMISSION_ALL);
 
@@ -67,53 +69,43 @@ void StreamAPIPlugin::onLoad()
 			previewTeamNum = teamNum;
 		});
 
-	cvarManager->registerCvar("streamapi_gray_port", "false", "", false, true, 0, true, 1, false);
-
-	// TODO: We should probably be a little bit more careful with this. Store it in a separate file? Refresh tokens every once in awhile?
-	auto tokenVar = cvarManager->registerCvar("streamapi_token", "", "Token for streamapi plugin", false, false, 0, false, 0, true);
-	webSocket.setToken(tokenVar.getStringValue());
 	auto portVar = cvarManager->registerCvar("streamapi_port", DEFAULT_SERVER_PORT, "Port for HTTP API to listen for requests", true, true, 1024, true, 49151, true);
+	auto useWebSocketVar = cvarManager->registerCvar("streamapi_use_external_bot", "0", "Pushes data to external API to be called from external bots", true, true, 0, true, 1, true);
 	serverPort = portVar.getIntValue();
 	strncpy(guiServerPort, to_string(serverPort).c_str(), sizeof(guiServerPort));
-	auto useWebSocketVar = cvarManager->registerCvar("streamapi_use_external_bot", "0", "Pushes data to external API to be called from external bots", true, true, 0, true, 1, true);
 	useWebSocket = useWebSocketVar.getBoolValue();
-
-	webSocket.loadTokenFromFile(tokenFile);
-	if (useWebSocket) {
-		cvarManager->log("Starting web socket");
-		webSocket.start();
-	} else {
-		httpThread = std::thread(&StreamAPIPlugin::runHttpServer, this, serverPort);
-	}
 
 	portVar.addOnValueChanged([this](std::string, CVarWrapper cvar) {
 		auto newServerPort = cvar.getIntValue();
-		if (newServerPort < 1024 || newServerPort > 49151) {
+		if (newServerPort < 1024 || newServerPort > 49151 || newServerPort == serverPort) {
 			return;
 		}
-		serverPort = newServerPort;
-		strncpy(guiServerPort, to_string(serverPort).c_str(), sizeof(guiServerPort));
 
+		lock_guard<mutex> lock(stopStartLock);
 		if (!useWebSocket) {
 			cvarManager->log("Restarting HTTP API server on new port");
-			httpServer.stop();
-			httpThread.join();
-			httpThread = std::thread(&StreamAPIPlugin::runHttpServer, this, serverPort);
+			startHttpServer(newServerPort);
 		}
 	});
 
 	useWebSocketVar.addOnValueChanged([this](std::string, CVarWrapper cvar) {
+		lock_guard<mutex> lock(stopStartLock);
 		if (cvar.getBoolValue() != useWebSocket) {
 			toggleBotSupport();
 		}
 	});
 
-	tokenVar.addOnValueChanged([this](std::string, CVarWrapper cvar) {
-		webSocket.setToken(cvar.getStringValue());
+	{
+		lock_guard<mutex> lock(stopStartLock);
 		if (useWebSocket) {
+			cvarManager->log("Starting web socket");
 			webSocket.start();
 		}
-	});
+		else {
+			cvarManager->log("Starting HTTP API server");
+			startHttpServer(serverPort);
+		}
+	}
 
 	trainingPackStr = "No training pack";
 	webSocket.setData("training", trainingPackStr);
@@ -157,15 +149,8 @@ void StreamAPIPlugin::onLoad()
 
 void StreamAPIPlugin::onUnload()
 {
-	if (useWebSocket) {
-		cvarManager->log("Stopping web socket");
-		webSocket.stop();
-	}
-	else {
-		cvarManager->log("Stopping HTTP API server");
-		httpServer.stop();
-		httpThread.join();
-	}
+	webSocket.stop();
+	stopHttpServer();
 }
 
 void StreamAPIPlugin::toggleBotSupport()
@@ -174,12 +159,11 @@ void StreamAPIPlugin::toggleBotSupport()
 	if (!useWebSocket) {
 		cvarManager->log("Starting HTTP API server and stopping web socket");
 		webSocket.stop();
-		httpThread = std::thread(&StreamAPIPlugin::runHttpServer, this, serverPort);
+		startHttpServer(serverPort);
 	}
 	else {
 		cvarManager->log("Starting web socket and stopping HTTP API server");
-		httpServer.stop();
-		httpThread.join();
+		stopHttpServer();
 		webSocket.start();
 	}
 }
@@ -643,10 +627,44 @@ void StreamAPIPlugin::onDump(vector<string> params)
 	cvarManager->log("Ranks: \n\t" + ranks.toString("", cvarManager));
 }
 
+void StreamAPIPlugin::startHttpServer(int port)
+{
+	stopHttpServer();
+	if (!serverIsRunning) {
+		serverPort = port;
+		strncpy(guiServerPort, to_string(serverPort).c_str(), sizeof(guiServerPort));
+		serverIsRunning = true;
+		abortHttpStart = false;
+		cvarManager->log("Creating httpThread");
+		httpThread = std::thread(&StreamAPIPlugin::runHttpServer, this, serverPort);
+		cvarManager->log("httpThread created");
+	}
+}
+
+void StreamAPIPlugin::stopHttpServer()
+{
+	if (serverIsRunning) {
+		serverIsRunning = false;
+		cvarManager->log("Calling httpServer.stop()");
+		abortHttpStart = true;
+		httpServer.stop();
+		cvarManager->log("Calling httpThread.join()");
+		httpThread.join();
+		cvarManager->log("httpThread has been joined");
+	}
+}
+
 void StreamAPIPlugin::runHttpServer(int port)
 {
 	cvarManager->log("Starting HTTP API server on port " + to_string(port));
-	serverStatus = "Launching";
+	serverStatus = "Running";
+	if (!abortHttpStart) httpServer.listen("0.0.0.0", port);
+	cvarManager->log("HTTP API server stopped");
+	serverStatus = "Stopped";
+}
+
+void StreamAPIPlugin::configureHttpServer()
+{
 	httpServer.Get("/cmd", [this](const httplib::Request& req, httplib::Response& res) {
 		string cmd;
 		string args;
@@ -668,13 +686,8 @@ void StreamAPIPlugin::runHttpServer(int port)
 		else {
 			res.set_content("no command given", "text/plain");
 		}
-		
-		});
 
-	serverStatus = "Running";
-	httpServer.listen("0.0.0.0", port);
-	cvarManager->log("HTTP API server stopped");
-	serverStatus = "Stopped";
+		});
 }
 
 /* Commands */

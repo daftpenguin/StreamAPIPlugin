@@ -1,6 +1,6 @@
 #pragma once
 
-#define WEBSOCKET_DEBUG
+//#define WEBSOCKET_DEBUG
 
 #include "WebSocketDataField.h"
 
@@ -57,6 +57,9 @@ public:
 	void loadTokenFromFile(std::filesystem::path fpath);
 	bool verifyToken(std::string token);
 	std::string& getStatus();
+
+	std::string username;
+	std::string platform;
 
 private:
 	void internalStop();

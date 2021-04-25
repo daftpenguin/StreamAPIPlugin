@@ -92,6 +92,7 @@ public:
 	void fromLoadoutWrapper(int teamNum, std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw);
 	void fromBakkesMod(int teamNum, std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw);
 	void fromPlugins(int teamNum, std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw);
+	void cleanUpStandardItems();
 
 	std::string toBMCode();
 	std::string toString();

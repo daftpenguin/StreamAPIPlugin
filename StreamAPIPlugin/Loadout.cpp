@@ -509,9 +509,11 @@ std::string Loadout::toString()
 	stringstream oss;
 	oss << "Loadout:\n"
 		<< "\tBody: " << body.toString() << endl
-		<< "\tPrimary: Paint: " << primaryPaint.toString(true) << ", Finish: " << primaryFinish.toString() << endl
-		<< "\tAccent: Paint: " << accentPaint.toString(false) << ", Finish: " << accentFinish.toString() << endl
-		<< "\tDecal: " << decal.toString() << endl
+		<< "\tPrimary: Paint: " << primaryPaint.toString(true) << ", Finish: " << primaryFinish.toString() << endl;
+	if (accentFinish.toString().compare("None") != 0 || decal.type == ALPHA_CONSOLE) {
+		oss << "\tAccent: Paint: " << accentPaint.toString(false) << ", Finish: " << accentFinish.toString() << endl;
+	}
+	oss << "\tDecal: " << decal.toString() << endl
 		<< "\tWheels: " << wheels.toString() << endl
 		<< "\tBoost: " << boost.toString() << endl
 		<< "\tAntenna: " << antenna.toString() << endl
@@ -527,9 +529,11 @@ std::string Loadout::getItemString(std::string itemType, std::string outputSepar
 	if (itemType.compare("json") == 0) {
 		stringstream oss;
 		oss << "{\"body\":" << quoted(body.toString()) << ","
-			<< "\"primary\":{\"paint\":" << quoted(primaryPaint.toString(true)) << ",\"finish\":" << quoted(primaryFinish.toString()) << "},"
-			<< "\"accent\":{\"paint\":" << quoted(accentPaint.toString(false)) << ",\"finish\":" << quoted(accentFinish.toString()) << "},"
-			<< "\"decal\":" << quoted(decal.toString()) << ","
+			<< "\"primary\":{\"paint\":" << quoted(primaryPaint.toString(true)) << ",\"finish\":" << quoted(primaryFinish.toString()) << "},";
+		if (accentFinish.toString().compare("None") != 0 || decal.type == ALPHA_CONSOLE) {
+			oss << "\"accent\":{\"paint\":" << quoted(accentPaint.toString(false)) << ",\"finish\":" << quoted(accentFinish.toString()) << "},";
+		}
+		oss << "\"decal\":" << quoted(decal.toString()) << ","
 			<< "\"wheels\":" << quoted(wheels.toString()) << ","
 			<< "\"boost\":" << quoted(boost.toString()) << ","
 			<< "\"trail\":" << quoted(trail.toString()) << ","
@@ -912,10 +916,20 @@ void Loadout::fromLoadoutWrapper(int teamNum, std::shared_ptr<CVarManagerWrapper
 	accentPaint.fromPaintId(lw.GetAccentPaintColorId(), false, customColors);
 }
 
+void Loadout::cleanUpStandardItems()
+{
+	/* Some items stored as none when they're the standard items. Setting their item strings here to make it look better. */
+	if (this->boost.itemString.compare("None") == 0) this->boost.itemString = "Standard";
+	if (this->goalExplosion.itemString.compare("None") == 0) this->goalExplosion.itemString = "Classic";
+	if (this->trail.itemString.compare("None") == 0) this->trail.itemString = "Classic";
+	if (this->engineAudio.itemString.compare("None") == 0) this->engineAudio.itemString = "Default";
+}
+
 void Loadout::load(int teamNum, std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw)
 {
 	fromLoadoutWrapper(teamNum, cv, gw);
 	fromBakkesMod(teamNum, cv, gw);
+	cleanUpStandardItems();
 	fromPlugins(teamNum, cv, gw);
 }
 

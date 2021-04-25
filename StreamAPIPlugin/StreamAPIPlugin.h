@@ -85,6 +85,8 @@ private:
 private:
 	void onDump(std::vector<std::string> params);
 
+	std::mutex stopStartLock; // Lock needed to synchronize between starting and stopping external and local bot support
+
 private:
 	/* Http Server */
 	// TODO: Wrap this up in a class like WebSocket
@@ -92,7 +94,13 @@ private:
 	std::string serverStatus;
 	httplib::Server httpServer;
 	std::thread httpThread;
+	bool serverIsRunning;
+	std::atomic<bool> abortHttpStart; // Server might not have started yet when attempting to stop it (happens during onLoad when port changed and useWebSocket is updated from config.cfg)
+
+	void startHttpServer(int port);
+	void stopHttpServer();
 	void runHttpServer(int port);
+	void configureHttpServer();
 
 private:
 	/* Commands */
@@ -120,7 +128,9 @@ private:
 	ImGuiContext* imguiCtx = nullptr;
 	char guiServerPort[6];
 	bool guiShowBadToken = false;
+	std::string guiServerTestStatus;
 	std::string guiWebSocketStatus;
+	std::string guiWebSocketTestStatus;
 	std::chrono::system_clock::time_point guiWebSocketStatusLastChecked;
 
 	void RenderSettings();
