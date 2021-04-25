@@ -933,7 +933,6 @@ void Loadout::cleanUpStandardItems()
 void Loadout::load(int teamNum, std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw)
 {
 	fromLoadoutWrapper(teamNum, cv, gw);
-	_globalCvarManager->log("DECAL: " + this->decal.toString());
 	fromBakkesMod(teamNum, cv, gw);
 	cleanUpStandardItems();
 	fromPlugins(teamNum, cv, gw);

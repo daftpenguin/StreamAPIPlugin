@@ -119,6 +119,8 @@ void StreamAPIPlugin::onLoad()
 	ranks.getRanks(gameWrapper);
 	cvarManager->log("Ranks: " + ranks.toString("json", cvarManager));
 	webSocket.setData("rank", ranks.toString("json", cvarManager));
+
+	
 	gameWrapper->GetMMRWrapper().RegisterMMRNotifier([this](UniqueIDWrapper id) {
 		if (id == gameWrapper->GetUniqueID()) {
 			ranks.updateRank(gameWrapper);
@@ -315,7 +317,7 @@ void StreamAPIPlugin::getVideo()
 	}
 }
 
-unordered_map<string, string> xboxRenames({
+unordered_map<string, string> ds4Renames({
 	{ "XboxTypeS_A", "Cross" },
 	{ "XboxTypeS_B", "Circle" },
 	{ "XboxTypeS_X", "Square" },
@@ -338,7 +340,7 @@ unordered_map<string, string> xboxRenames({
 	{ "XboxTypeS_RightThumbStick", "R3" },
 	});
 
-unordered_map<string, string> ds4Renames({
+unordered_map<string, string> xboxRenames({
 	{ "XboxTypeS_A", "A" },
 	{ "XboxTypeS_B", "B" },
 	{ "XboxTypeS_X", "X" },
