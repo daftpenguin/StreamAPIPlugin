@@ -34,12 +34,25 @@ void WebSocket::init(std::filesystem::path tokenFile)
 bool WebSocket::setToken(std::string token)
 {
 	if (verifyToken(token)) {
-		ofstream fout(tokenFile);
-		if (fout.is_open()) {
-			fout << token;
-			fout.close();
-			this->token = token;
-			return true;
+		bool saveToFile = true;
+		if (!fs::exists(tokenFile.parent_path())) {
+			if (fs::create_directories(tokenFile.parent_path())) {
+				_globalCvarManager->log("Created streamapi directory");
+			}
+			else {
+				saveToFile = false;
+				_globalCvarManager->log("Could not create streamapi directory. Cannot save token to be reloaded after restart.");
+			}
+		}
+		if (saveToFile) {
+			ofstream fout(tokenFile);
+			if (fout.is_open()) {
+				fout << token;
+				fout.close();
+				this->token = token;
+				return true;
+			}
+			_globalCvarManager->log("Failed to open token file. Cannot save token to be reloaded after restart.");
 		}
 		return false;
 	}

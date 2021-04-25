@@ -1,10 +1,24 @@
 Stream API Plugin
-9|If the plugin is loaded, the port number (grayed out) should be shown below.
-9|The port is grayed out because you cannot currently change the port in this window.
-9|To change the port, press F6 for the console window, and type (without quotes) "streamapi_port 10111" and press enter.
-9|Replace 10111 with any integer between 1024 and 49151 (inclusively).
-10|streamapi_gray_port
-12|HTTP API Port|streamapi_port
-11|
+9|The plugin is installed but isn't loaded.
+9|This usually happens if you installed by downloading the zip, which I highly recommend NEVER doing.
+9|Click the button below to install through plugin manager.
+9|If you didn't install by zip, go to the next section below the separator.
+0|Reinstall with Plugin Manager|bpm_install 215
+9|If the button above did not work, it's usually because plugin manager isn't loaded.
+9|Press this button to open the F6 console
+7|
+0|Open F6 Console|togglemenu console2
+9|Now press this button to load plugin manager
+7|
+0|Load Plugin Manager|plugin reload pluginmanager
+9|Does a "LoadLibrary is NULL" message appear in the console?
+9|If so, check out the BakkesMod Fandom Troublehshooting page for this error to find how to fix this.
+9|If you did not see a "LoadLibrary is NULL" error, try the reinstall button again.
+9|If plugin manager wasn't loaded, it was somehow disabled. Use the plugin manager's UI to enable plugin manager to autoload.
+8|
+9|If you didn't install by zip, for some reason the plugin was installed but not added to autoload (or you previously disabled it).
+9|Go to the plugin manager's settings (top of the list), open the UI, and check the checkbox next to Stream API Plugin to enable it.
+8|
+9|If none of these things worked, my discord is DaftPenguin#5103. You can find other methods of contacting me at: daftpenguin.com/about.
 8|
 9|Plugin made by DaftPenguin
