@@ -27,8 +27,6 @@ public:
 	}
 
 	bool isDirty;
-
-private:
 	std::string fieldName;
 	std::string data;
 };

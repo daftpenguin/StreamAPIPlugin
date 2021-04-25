@@ -117,9 +117,6 @@ void StreamAPIPlugin::onLoad()
 	getVideo();
 	getTrainingPack();
 	ranks.getRanks(gameWrapper);
-	cvarManager->log("Ranks: " + ranks.toString("json", cvarManager));
-	webSocket.setData("rank", ranks.toString("json", cvarManager));
-
 	
 	gameWrapper->GetMMRWrapper().RegisterMMRNotifier([this](UniqueIDWrapper id) {
 		if (id == gameWrapper->GetUniqueID()) {
@@ -129,6 +126,7 @@ void StreamAPIPlugin::onLoad()
 		});
 	gameWrapper->SetTimeout([this](GameWrapper* gw) { // Doesn't appear to update when ranks are initially retrieved
 		ranks.getRanks(gameWrapper);
+		webSocket.setData("rank", ranks.toString("json", cvarManager));
 		}, 10.0f);
 
 	gameWrapper->HookEventPost(LOADOUT_CHANGED_EVENT, [this](string eventName) { getLoadout(); });
@@ -620,6 +618,7 @@ void StreamAPIPlugin::onDump(vector<string> params)
 	getBindings();
 	getVideo();
 	ranks.getRanks(gameWrapper);
+	webSocket.setData("rank", ranks.toString("json", cvarManager));
 
 	cvarManager->log(this->loadout.toString());
 	cvarManager->log("Sens: \n\t" + sensStr);

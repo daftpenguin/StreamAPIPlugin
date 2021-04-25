@@ -264,6 +264,7 @@ void WebSocket::setAllDataDirty()
 {
 	dataMutex.lock();
 	for (auto it = data.begin(); it != data.end(); ++it) {
+		if (it->first.compare("rank") == 0 && it->second.data.empty()) continue;
 		it->second.isDirty = true;
 	}
 	someDataIsDirty = true;
