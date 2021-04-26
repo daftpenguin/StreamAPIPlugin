@@ -611,6 +611,9 @@ void LoadoutItem::clear()
 void LoadoutItem::handleAttributes(ArrayWrapper<ProductAttributeWrapper> attrs, std::shared_ptr<GameWrapper> gw)
 {
 	stringstream ss;
+	if (attrs.IsNull()) {
+		return;
+	}
 	for (int i = 0; i < attrs.Count(); i++) {
 		auto attr = attrs.Get(i);
 		if (attr.GetAttributeType().compare("ProductAttribute_Certified_TA") == 0) {
