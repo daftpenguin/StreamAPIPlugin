@@ -27,11 +27,14 @@ int _globalBMVersion = 0;
 void StreamAPIPlugin::onLoad()
 {
 	_globalCvarManager = cvarManager;
-	tokenFile = gameWrapper->GetBakkesModPath() / "data" / "streamapi" / "token.txt";
+
+	// Initialize some things
+	tokenFile = gameWrapper->GetDataFolder() / "streamapi" / "token.txt";
 	webSocket.init(tokenFile);
 	webSocket.loadTokenFromFile(tokenFile);
 	guiWebSocketStatusLastChecked = std::chrono::system_clock::now();
 	configureHttpServer();
+	customMapSupport.init(gameWrapper->GetDataFolder() / "streamapi" / "maps.json");
 	
 	cvarManager->registerNotifier("streamapi_dump", bind(&StreamAPIPlugin::onDump, this, std::placeholders::_1), "dumps loadout data to console", PERMISSION_ALL);
 
@@ -117,13 +120,14 @@ void StreamAPIPlugin::onLoad()
 	getVideo();
 	getTrainingPack();
 	ranks.getRanks(gameWrapper);
-	
-	gameWrapper->GetMMRWrapper().RegisterMMRNotifier([this](UniqueIDWrapper id) {
+
+	mmrNotifierToken = gameWrapper->GetMMRWrapper().RegisterMMRNotifier([this](UniqueIDWrapper id) {
 		if (id == gameWrapper->GetUniqueID()) {
 			ranks.updateRank(gameWrapper);
 			webSocket.setData("rank", ranks.toString("json", cvarManager));
 		}
 		});
+	
 	gameWrapper->SetTimeout([this](GameWrapper* gw) { // Doesn't appear to update when ranks are initially retrieved
 		ranks.getRanks(gameWrapper);
 		webSocket.setData("rank", ranks.toString("json", cvarManager));
@@ -137,6 +141,13 @@ void StreamAPIPlugin::onLoad()
 		gameWrapper->HookEventPost(evt, [this](string eventName) { cvarManager->log(eventName); getVideo(); });
 	}
 	gameWrapper->HookEventPost(CUSTOM_TRAINING_LOADED_EVENT, [this](string eventName) { getTrainingPack();  });
+	gameWrapper->HookEventWithCaller<ServerWrapper>(MAP_LOADED_EVENT, [this](ServerWrapper sw, void* params, string eventName) {
+		cvarManager->log(eventName);
+		auto mapName = wstring(*reinterpret_cast<wchar_t**>(params));
+		cvarManager->log("Casted param");
+		customMapSupport.updateMap(mapName);
+		cvarManager->log("Map: " + customMapSupport.toString());
+		});
 
 	commandNameToCommand["loadout"] = std::bind(&StreamAPIPlugin::loadoutCommand, this, std::placeholders::_1);
 	commandNameToCommand["sens"] = std::bind(&StreamAPIPlugin::sensCommand, this, std::placeholders::_1);
@@ -145,6 +156,7 @@ void StreamAPIPlugin::onLoad()
 	commandNameToCommand["video"] = std::bind(&StreamAPIPlugin::videoCommand, this, std::placeholders::_1);
 	commandNameToCommand["training"] = std::bind(&StreamAPIPlugin::trainingCommand, this, std::placeholders::_1);
 	commandNameToCommand["rank"] = std::bind(&StreamAPIPlugin::rankCommand, this, std::placeholders::_1);
+	commandNameToCommand["workshop"] = std::bind(&StreamAPIPlugin::workshopCommand, this, std::placeholders::_1);
 }
 
 void StreamAPIPlugin::onUnload()
@@ -628,6 +640,7 @@ void StreamAPIPlugin::onDump(vector<string> params)
 	cvarManager->log("DS4 bindings: \n\t" + ds4BindingsStr);
 	cvarManager->log("Video: \n\t" + videoStr);
 	cvarManager->log("Ranks: \n\t" + ranks.toString("", cvarManager));
+	cvarManager->log("Map: " + customMapSupport.toString());
 }
 
 void StreamAPIPlugin::startHttpServer(int port)
@@ -733,4 +746,9 @@ std::string StreamAPIPlugin::trainingCommand(std::string args)
 std::string StreamAPIPlugin::rankCommand(std::string args)
 {
 	return ranks.toString(args, cvarManager);
+}
+
+std::string StreamAPIPlugin::workshopCommand(std::string args)
+{
+	return customMapSupport.toString();
 }

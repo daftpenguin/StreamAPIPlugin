@@ -96,6 +96,7 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="CustomMapSupport.cpp" />
     <ClCompile Include="imgui\imgui.cpp" />
     <ClCompile Include="imgui\imguivariouscontrols.cpp" />
     <ClCompile Include="imgui\imgui_additions.cpp" />
@@ -117,6 +118,7 @@
     <ClInclude Include="BMLoadoutLib\base64.h" />
     <ClInclude Include="BMLoadoutLib\bmloadout.h" />
     <ClInclude Include="BMLoadoutLib\helper_classes.h" />
+    <ClInclude Include="CustomMapSupport.h" />
     <ClInclude Include="imgui\imconfig.h" />
     <ClInclude Include="imgui\imgui.h" />
     <ClInclude Include="imgui\imguivariouscontrols.h" />

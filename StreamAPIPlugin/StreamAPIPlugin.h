@@ -11,6 +11,7 @@
 #include "Ranks.h"
 #include "WebSocket.h"
 #include "imgui/imgui.h"
+#include "CustomMapSupport.h"
 
 #include <string>
 #include <vector>
@@ -34,6 +35,7 @@ const std::string SENS_CHANGED_EVENT = "Function TAGame.GFxData_Controls_TA.Hand
 const std::string CAMERA_CHANGED_EVENT = "Function TAGame.GFxData_Settings_TA.OnCameraOptionChanged";
 const std::string BINDINGS_CHANGED_EVENT = "Function TAGame.PlayerInput_Menu_TA.OnActiveBindingsChanged";
 const std::string CUSTOM_TRAINING_LOADED_EVENT = "Function TAGame.GameEvent_TrainingEditor_TA.StartPlayTest";
+const std::string MAP_LOADED_EVENT = "Function TAGame.LoadingScreen_TA.HandlePreLoadMap";
 
 // Should probably just hook on UserSetting change for all but loadout...
 const std::string VIDEO_CHANGED_EVENTS[] = {
@@ -80,7 +82,11 @@ private:
 	std::string xboxBindingsStr;
 	std::string videoStr;
 	std::string trainingPackStr;
+
+	std::unique_ptr<MMRNotifierToken> mmrNotifierToken;
 	Ranks ranks;
+	
+	CustomMapSupport customMapSupport;
 
 private:
 	void onDump(std::vector<std::string> params);
@@ -111,6 +117,7 @@ private:
 	std::string videoCommand(std::string args);
 	std::string trainingCommand(std::string args);
 	std::string rankCommand(std::string args);
+	std::string workshopCommand(std::string args);
 
 	std::map<std::string, std::function<std::string(std::string args)> > commandNameToCommand;
 
@@ -125,6 +132,7 @@ private:
 	WebSocket webSocket;
 
 private:
+	/* GUI */
 	ImGuiContext* imguiCtx = nullptr;
 	char guiServerPort[6];
 	bool guiShowBadToken = false;
