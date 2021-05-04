@@ -1,8 +1,3 @@
-#pragma comment(lib, "libssl.lib")
-#pragma comment(lib, "libcrypto.lib")
-#pragma comment(lib, "CRYPT32.lib")
-#pragma comment(lib, "Ws2_32.lib")
-
 #include "WebSocket.h"
 #include "StreamAPIPlugin.h"
 #include "nlohmann/json.hpp"
@@ -21,6 +16,7 @@ WebSocket::WebSocket() : isRunning(false), token(""), status(WebSocketStatus::ST
 	data.emplace("video", WebSocketDataField("video"));
 	data.emplace("training", WebSocketDataField("training"));
 	data.emplace("rank", WebSocketDataField("rank"));
+	data.emplace("workshop", WebSocketDataField("workshop"));
 
 	srand(time(NULL));
 }
@@ -371,7 +367,7 @@ context_ptr WebSocket::on_tls_init()
 			boost::asio::ssl::context::single_dh_use);
 	}
 	catch (std::exception& e) {
-		std::cout << e.what() << std::endl;
+		_globalCvarManager->log("CustomMapSupport: " + e.what());
 	}
 	return ctx;
 }

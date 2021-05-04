@@ -1,28 +1,157 @@
 #include "CustomMapSupport.h"
 #include "StreamAPIPlugin.h"
+#include "WinReg-4.1.0/WinReg/WinReg.hpp"
 
 #include <fstream>
 #include <filesystem>
 #include <openssl/md5.h>
+#include <boost/algorithm/string.hpp>
 
 using namespace std;
 using json = nlohmann::json;
 namespace fs = std::filesystem;
 
-CustomMapSupport::CustomMapSupport() : lastModified(0), mapsJsonPath(mapsJsonPath), loadedMapDetails("No map loaded yet"), initialized(false) {}
-
-void CustomMapSupport::init(std::filesystem::path mapsJsonPath)
+fs::path getSteamRLInstallPath()
 {
-	// TODO: Load the local maps.json in main thread, and load the server copy in a different one? Lock data when parsing json.
+	winreg::RegKey key{ HKEY_CURRENT_USER, L"SOFTWARE\\Valve\\Steam" };
+	wstring steamPathStr = key.GetStringValue(L"SteamPath");
 
-	// We now have a maps.json which has a mapping of workshop ids to map struct
-	// Load each map struct into mapping from hash to earliest map struct (to handle collisions)
-	// Additionally, maintain a mapping from filename to map struct
+	if (steamPathStr.empty()) {
+		_globalCvarManager->log("CustomMapSupport: Steam not installed");
+		return fs::path();
+	}
 
-	// Next we load all workshop maps and identify their maps, and store them as mapping from filepath to map struct
-	// If steam, check workshop maps and leverage their workshop ids
-	// For both epic and steam, check mods folder and use their filenames and hashes
-	// For both, check the file sizes of the default maps
+	fs::path steamPath(steamPathStr);
+	if (!fs::exists(steamPath)) {
+		_globalCvarManager->log("CustomMapSupport: Steam path doesn't exist");
+		return fs::path();
+	}
+
+	vector<fs::path> steamLibraryPaths({ steamPath / "steamapps" });
+	if (fs::exists(steamPath / "steamapps" / "libraryfolders.vdf")) {
+		ifstream fin(steamPath / "steamapps" / "libraryfolders.vdf");
+		if (fin.fail()) {
+			_globalCvarManager->log("CustomMapSupport: Failed to open libraryfolders.vdf");
+			return fs::path();
+		}
+		string line;
+		while (getline(fin, line)) {
+			boost::algorithm::trim(line);
+			vector<string> fields;
+			boost::algorithm::split(fields, line, boost::is_any_of("\t"));
+			if (fields.size() == 3) {
+				try {
+					int v = stoi(fields[0].substr(1, fields[0].size() - 2));
+					fs::path path(fields[2].substr(1, fields[2].size() - 2));
+					steamLibraryPaths.push_back(path);
+				}
+				catch (...) {
+					continue;
+				}
+			}
+		}
+	}
+
+	for (const fs::path& path : steamLibraryPaths) {
+		if (fs::exists(path / "appmanifest_252950.acf")) {
+			fs::path rlPath = path / "common" / "rocketleague";
+			if (fs::exists(rlPath)) return rlPath;
+		}
+	}
+
+	return fs::path();
+}
+
+fs::path getEpicRLInstallPath()
+{
+	winreg::RegKey key{ HKEY_CURRENT_USER, L"SOFTWARE\\Epic Games\\EOS" };
+	wstring epicManifestsDir = key.GetStringValue(L"ModSdkMetadataDir");
+
+	if (epicManifestsDir.empty()) {
+		return fs::path();
+	}
+
+	for (auto& p : fs::directory_iterator(epicManifestsDir)) {
+		if (p.is_directory()) continue;
+
+		auto manifest = p.path();
+		ifstream fin(manifest);
+		if (fin.fail()) {
+			_globalCvarManager->log("CustomMapSupport: Failed to load epic manifest file: " + manifest.string());
+			continue;
+		}
+
+		stringstream ss;
+		ss << fin.rdbuf();
+
+		try {
+			json j = json::parse(ss.str());
+			if (j.find("MandatoryAppFolderName") == j.end() || j.find("InstallLocation") == j.end()) {
+				_globalCvarManager->log("CustomMapSupport: Failed to find InstallLocation or MandatoryAppFolderName in manifest file: " + manifest.string());
+				continue;
+			}
+			auto mandatoryAppFolderName = fs::path(j["MandatoryAppFolderName"].get<string>());
+			if (mandatoryAppFolderName.compare("rocketleague") != 0) {
+				continue;
+			}
+			auto installLocation = fs::path(j["InstallLocation"].get<string>());
+			if (!fs::exists(installLocation)) {
+				_globalCvarManager->log("CustomMapSupport: InstallLocation (" + installLocation.string() + ") retrieved from manifest file (" + manifest.string() + ") does not exist");
+				continue;
+			}
+			return installLocation;
+		}
+		catch (...) {
+			_globalCvarManager->log("CustomMapSupport: Failed to parse manifest file: " + manifest.string());
+		}
+	}
+
+	return fs::path();
+}
+
+CustomMapSupport::CustomMapSupport() : lastModified(0), mapsJsonPath(mapsJsonPath), loadedMapDetails("No map loaded yet"), initialized(false)
+{
+	
+}
+
+void CustomMapSupport::init(bool isSteamVersion, std::filesystem::path mapsJsonPath)
+{
+	// TODO: Do initialization in a separate thread?
+
+	auto steamPath = getSteamRLInstallPath();
+	if (!steamPath.empty()) {
+		auto standardMapPath = steamPath / "TAGame" / "CookedPCConsole";
+		if (fs::exists(standardMapPath)) {
+			if (isSteamVersion) {
+				standardMapsDir = standardMapPath;
+			}
+
+			auto modsPath = standardMapPath / "mods";
+			if (fs::exists(modsPath)) {
+				customMapsDirs.push_back(modsPath);
+			}
+		}
+
+		auto workshopPath = steamPath.parent_path().parent_path() / "workshop" / "content" / "252950";
+		if (fs::exists(workshopPath)) {
+			workshopDir = workshopPath;
+		}
+	}
+
+	auto epicPath = getEpicRLInstallPath();
+	if (!epicPath.empty()) {
+		auto standardMapPath = epicPath / "TAGame" / "CookedPCConsole";
+		if (fs::exists(standardMapPath)) {
+			if (!isSteamVersion) {
+				standardMapsDir = standardMapPath;
+			}
+
+			auto modsPath = standardMapPath / "mods";
+			if (fs::exists(modsPath)) {
+				customMapsDirs.push_back(modsPath);
+			}
+		}
+	}
 
 	// Load the local copy of maps.json
 	bool downloadUpdate = true;
@@ -112,8 +241,8 @@ void CustomMapSupport::init(std::filesystem::path mapsJsonPath)
 		}
 	}
 
-	// Complete the loading of the data from the json
 	loadMapsFromJson(mapsJson);
+
 	initialized = true;
 }
 
@@ -171,19 +300,19 @@ unordered_set<wstring> ignoredMapNames({
 	});
 
 unordered_set<wstring> mapReplacementMaps({
-	L"Labs_Basin_P.upk",
-	L"Labs_CirclePillars_P.upk",
-	L"Labs_Corridor_P.upk",
-	L"Labs_Cosmic_P.upk",
-	L"Labs_Cosmic_V4_P.upk",
-	L"Labs_DoubleGoal_P.upk",
-	L"Labs_DoubleGoal_V2_P.upk",
-	L"Labs_Galleon_P.upk",
-	L"Labs_Octagon_02_P.upk",
-	L"Labs_Octagon_P.upk",
-	L"Labs_Underpass_P.upk",
-	L"Labs_Underpass_v0_p.upk",
-	L"Labs_Utopia_P.upk"
+	L"Labs_Basin_P",
+	L"Labs_CirclePillars_P",
+	L"Labs_Corridor_P",
+	L"Labs_Cosmic_P",
+	L"Labs_Cosmic_V4_P",
+	L"Labs_DoubleGoal_P",
+	L"Labs_DoubleGoal_V2_P",
+	L"Labs_Galleon_P",
+	L"Labs_Octagon_02_P",
+	L"Labs_Octagon_P",
+	L"Labs_Underpass_P",
+	L"Labs_Underpass_v0_p",
+	L"Labs_Utopia_P"
 	});
 
 void CustomMapSupport::updateMap(std::wstring mapName)
@@ -197,17 +326,21 @@ void CustomMapSupport::updateMap(std::wstring mapName)
 			return;
 		}
 
-		fs::path path(mapName);
-
 		if (mapReplacementMaps.find(mapName) != mapReplacementMaps.end()) {
-			updateByHash(path);
+			updateByHash(standardMapsDir / (mapName + L".upk"));
 			return;
 		}
 
-		// TODO: Attempt to find absolute path if not an absolute path
+		fs::path path(mapName);
+		if (updateByFilename(path.filename().string(), false)) {
+			_globalCvarManager->log(L"CustomMapSupport: custom map detected by filename: " + mapName);
+			return;
+		}
 
+		path = findAbsolutePath(path);
+
+		// Attempt to get workshopId from path
 		if (path.is_absolute() && fs::exists(path)) {
-			// Attempt to get workshopId from path
 			for (auto p : path) {
 				if (p.compare("252950") == 0) continue;
 
@@ -218,24 +351,16 @@ void CustomMapSupport::updateMap(std::wstring mapName)
 						return;
 					}
 				}
-			}
-
-			if (updateByFilename(path.filename().string(), false)) {
-				_globalCvarManager->log(L"CustomMapSupport: custom map detected by filename: " + mapName);
-				return;
-			}
-
-			if (updateByHash(path)) {
-				_globalCvarManager->log(L"CustomMapSupport: custom map detected by hash: " + mapName);
-				return;
-			}
-			updateByFilename(path.filename().string(), true);
-			_globalCvarManager->log(L"CustomMapSupport: failed to detect custom map. Setting as map name: " + mapName);
+			}			
 		}
-		else {
-			updateByFilename(path.filename().string(), true);
-			_globalCvarManager->log(L"CustomMapSupport: failed to detect custom map. Setting as map name: " + mapName);
+
+		if (path.is_absolute() && fs::exists(path) && updateByHash(path)) {
+			_globalCvarManager->log(L"CustomMapSupport: custom map detected by hash: " + mapName);
+			return;
 		}
+
+		updateByFilename(path.filename().string(), true);
+		_globalCvarManager->log(L"CustomMapSupport: failed to detect custom map. Setting as map name: " + mapName);
 	}
 }
 
@@ -285,6 +410,7 @@ bool CustomMapSupport::updateByWorkshopId(std::string workshopId)
 
 bool CustomMapSupport::updateByFilename(std::string filename, bool forced)
 {
+	// TODO: If there isn't an extension, try them all
 	auto it = filenameToAllMaps.find(filename);
 	if (it == filenameToAllMaps.end()) {
 		if (forced) {
@@ -317,13 +443,14 @@ bool CustomMapSupport::updateByHash(std::filesystem::path path)
 	// Using openSSL's MD5 since we're already depending on openSSL
 	MD5_CTX ctx;
 	MD5_Init(&ctx);
-	char buf[READ_FILE_CHUNK_SIZE];
+	char* buf = (char *) malloc(READ_FILE_CHUNK_SIZE);
 	while (!fin.eof() || !fin.fail()) {
 		fin.read(buf, READ_FILE_CHUNK_SIZE);
 		MD5_Update(&ctx, buf, fin.gcount());
 	}
 
 	unsigned char md5[MD5_DIGEST_LENGTH];
+	bool matched = false;
 	if (MD5_Final(md5, &ctx)) {
 		stringstream ss;
 		for (int i = 0; i < MD5_DIGEST_LENGTH; i++) {
@@ -334,15 +461,51 @@ bool CustomMapSupport::updateByHash(std::filesystem::path path)
 		auto hashIt = hashToAllMaps.find(hash);
 		if (hashIt == hashToAllMaps.end()) {
 			_globalCvarManager->log("CustomMapSupport: hash (" + hash + ") for file (" + path.string() + ") did not match any files in maps.json");
-			return false;
 		}
-
-		updateByMap(hashIt->second);
+		else {
+			updateByMap(hashIt->second);
+			matched = true;
+		}
 	}
 	else {
 		_globalCvarManager->log("CustomMapSupport: failed to generate hash from file: " + path.string());
-		return false;
 	}
+
+	free(buf);
+	return matched;
+}
+
+vector<string> mapExtensions({ ".udk", ".upk", ".umap" });
+
+std::filesystem::path CustomMapSupport::findAbsolutePath(std::filesystem::path path)
+{
+	if (path.is_absolute()) return path;
+
+	// Make a best effort approach to finding the map's file location
+
+	// TODO: We shouldn't add an extension if there is one already
+	for (auto& extension : mapExtensions) {
+		for (auto& d : customMapsDirs) {
+			auto p = d / (path.stem().string() + extension);
+			if (fs::exists(p)) {
+				return p;
+			}
+		}
+	}
+
+	if (!workshopDir.empty()) {
+		for (auto& extension : mapExtensions) {
+			for (auto& d : fs::directory_iterator(workshopDir)) {
+				auto p = d.path() / (path.stem().string() + extension);
+				if (fs::exists(p)) {
+					return p;
+				}
+			}
+		}
+	}
+
+	_globalCvarManager->log("CustomMapSupport: failed to find absolute path for: " + path.string());
+	return path;
 }
 
 void from_json(const json& j, CustomMapFile& mapFile)

@@ -34,7 +34,7 @@ void StreamAPIPlugin::onLoad()
 	webSocket.loadTokenFromFile(tokenFile);
 	guiWebSocketStatusLastChecked = std::chrono::system_clock::now();
 	configureHttpServer();
-	customMapSupport.init(gameWrapper->GetDataFolder() / "streamapi" / "maps.json");
+	customMapSupport.init(gameWrapper->IsUsingSteamVersion(), gameWrapper->GetDataFolder() / "streamapi" / "maps.json");
 	
 	cvarManager->registerNotifier("streamapi_dump", bind(&StreamAPIPlugin::onDump, this, std::placeholders::_1), "dumps loadout data to console", PERMISSION_ALL);
 
@@ -120,6 +120,7 @@ void StreamAPIPlugin::onLoad()
 	getVideo();
 	getTrainingPack();
 	ranks.getRanks(gameWrapper);
+	webSocket.setData("workshop", customMapSupport.toString());
 
 	mmrNotifierToken = gameWrapper->GetMMRWrapper().RegisterMMRNotifier([this](UniqueIDWrapper id) {
 		if (id == gameWrapper->GetUniqueID()) {
@@ -144,9 +145,12 @@ void StreamAPIPlugin::onLoad()
 	gameWrapper->HookEventWithCaller<ServerWrapper>(MAP_LOADED_EVENT, [this](ServerWrapper sw, void* params, string eventName) {
 		cvarManager->log(eventName);
 		auto mapName = wstring(*reinterpret_cast<wchar_t**>(params));
-		cvarManager->log("Casted param");
+		auto oldMapStr = customMapSupport.toString();
 		customMapSupport.updateMap(mapName);
-		cvarManager->log("Map: " + customMapSupport.toString());
+		auto newMapStr = customMapSupport.toString();
+		if (oldMapStr.compare(newMapStr) != 0) {
+			webSocket.setData("workshop", newMapStr);
+		}
 		});
 
 	commandNameToCommand["loadout"] = std::bind(&StreamAPIPlugin::loadoutCommand, this, std::placeholders::_1);

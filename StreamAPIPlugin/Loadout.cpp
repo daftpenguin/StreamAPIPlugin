@@ -622,7 +622,7 @@ void LoadoutItem::handleAttributes(ArrayWrapper<ProductAttributeWrapper> attrs, 
 		}
 		else if (attr.GetAttributeType().compare("ProductAttribute_Painted_TA") == 0) {
 			this->paintId = ProductAttribute_PaintedWrapper(attr.memory_address).GetPaintID();
-			ss << " " << PaintToString[this->paintId];
+			this->itemString = PaintToString[this->paintId] + " " + this->itemString;
 		}
 		else if (attr.GetAttributeType().compare("ProductAttribute_SpecialEdition_TA") == 0) {
 			auto specEdName = gw->GetItemsWrapper().GetSpecialEditionDB().GetSpecialEditionName(ProductAttribute_SpecialEditionWrapper(attr.memory_address).GetEditionID());

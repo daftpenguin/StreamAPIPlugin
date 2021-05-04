@@ -40,7 +40,7 @@ class CustomMapSupport
 {
 public:
 	CustomMapSupport();
-	void init(std::filesystem::path mapsJsonPath);
+	void init(bool isSteamVersion, std::filesystem::path mapsJsonPath);
 	void updateMap(std::wstring mapName);
 	std::string toString();
 
@@ -50,7 +50,9 @@ private:
 	void updateByMap(CustomMap& map);
 	bool updateByWorkshopId(std::string workshopId);
 	bool updateByFilename(std::string filename, bool forced);
-	bool updateByHash(std::filesystem::path);
+	bool updateByHash(std::filesystem::path path);
+
+	std::filesystem::path findAbsolutePath(std::filesystem::path path);
 
 	unsigned long long lastModified;
 
@@ -61,5 +63,9 @@ private:
 
 	std::string loadedMapDetails;
 	std::atomic<bool> initialized;
+
+	std::filesystem::path standardMapsDir;
+	std::vector<std::filesystem::path> customMapsDirs;
+	std::filesystem::path workshopDir;
 };
 
