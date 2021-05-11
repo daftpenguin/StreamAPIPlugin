@@ -4,7 +4,22 @@
 
 #include <unordered_map>
 
-extern enum StreamAPIPlaylist;
+enum class StreamAPIPlaylist {
+	UNKNOWN = -1,
+	DUEL = 1,
+	DOUBLES = 2,
+	STANDARD = 3,
+	CHAOS = 4,
+	RANKEDDUEL = 10,
+	RANKEDDOUBLES = 11,
+	RANKEDSOLOSTANDARD = 12,
+	RANKEDSTANDARD = 13,
+	RANKEDHOOPS = 27,
+	RANKEDRUMBLE = 28,
+	RANKEDDROPSHOT = 29,
+	RANKEDSNOWDAY = 30,
+	CASUAL = 999,
+};
 
 class Ranks
 {

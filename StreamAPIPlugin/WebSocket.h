@@ -1,6 +1,6 @@
 #pragma once
 
-#define WEBSOCKET_DEBUG
+//#define WEBSOCKET_DEBUG
 
 #include "WebSocketDataField.h"
 

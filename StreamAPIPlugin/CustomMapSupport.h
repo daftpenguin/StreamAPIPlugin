@@ -16,24 +16,37 @@
 
 const int READ_FILE_CHUNK_SIZE = 1000000;
 
-struct CustomMapFile {
+enum class CustomMapType {
+	WORKSHOP,
+	LETHAMYR,
+};
+
+struct WorkshopMapFile {
 	std::string filename;
 	std::string fullHash;
 	unsigned long long updateTimestamp;
 };
 
-struct CustomMap {
-	std::string workshopId;
-	std::string author;
+class CustomMap {
+public:
+	CustomMapType type;
 	std::string title;
+	std::string author;
 	std::string description;
+
+	// For Workshop based maps
+	std::string workshopId;
 	unsigned long long published;
 	unsigned long long lastUpdated;
+	std::vector<WorkshopMapFile> mapFileHistory;
 
-	std::vector<CustomMapFile> mapFileHistory;
+	// For Lethamyr based maps
+	std::string link;
+	std::string filename;
+	std::string fullHash;
 };
 
-void from_json(const nlohmann::json& j, CustomMapFile& mapFile);
+void from_json(const nlohmann::json& j, WorkshopMapFile& mapFile);
 void from_json(const nlohmann::json& j, CustomMap& map);
 
 class CustomMapSupport
@@ -57,7 +70,7 @@ private:
 	unsigned long long lastModified;
 
 	std::filesystem::path mapsJsonPath;
-	std::unordered_map<std::string, CustomMap> workshopIdToMap;
+	std::unordered_map<std::string, CustomMap> workshopIdToMap; // For Leth maps, this will be title to map
 	std::unordered_map<std::string, CustomMap> hashToAllMaps;
 	std::unordered_map<std::string, CustomMap> filenameToAllMaps;
 

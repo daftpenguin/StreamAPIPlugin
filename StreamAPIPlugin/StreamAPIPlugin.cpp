@@ -398,7 +398,7 @@ unordered_map<string, string> actionRenames({
 	{ "RollLeft", "Air Roll Left" },
 	{ "Jump", "Jump" },
 	{ "Boost", "Boost" },
-	{ "Handbrake", "Handbrake" },
+	{ "Handbrake", "Powerslide" },
 	{ "SecondaryCamera", "Focus On Ball" },
 	{ "ToggleRoll", "Air Roll" },
 	{ "RearCamera", "Rear Cam" },

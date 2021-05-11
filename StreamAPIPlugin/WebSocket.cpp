@@ -367,7 +367,7 @@ context_ptr WebSocket::on_tls_init()
 			boost::asio::ssl::context::single_dh_use);
 	}
 	catch (std::exception& e) {
-		_globalCvarManager->log("CustomMapSupport: " + e.what());
+		_globalCvarManager->log("CustomMapSupport: " + string(e.what()));
 	}
 	return ctx;
 }

@@ -7,88 +7,71 @@
 
 using namespace std;
 
-enum StreamAPIPlaylist {
-	// Copied from NLHero's Session MMR and streak tracker plugin
-	PLAYLIST_UNKNOWN = -1,
-	PLAYLIST_DUEL = 1,
-	PLAYLIST_DOUBLES = 2,
-	PLAYLIST_STANDARD = 3,
-	PLAYLIST_CHAOS = 4,
-	PLAYLIST_RANKEDDUEL = 10,
-	PLAYLIST_RANKEDDOUBLES = 11,
-	PLAYLIST_RANKEDSOLOSTANDARD = 12,
-	PLAYLIST_RANKEDSTANDARD = 13,
-	PLAYLIST_RANKEDHOOPS = 27,
-	PLAYLIST_RANKEDRUMBLE = 28,
-	PLAYLIST_RANKEDDROPSHOT = 29,
-	PLAYLIST_RANKEDSNOWDAY = 30,
-	PLAYLIST_CASUAL = 999,
-};
-
 unordered_map<StreamAPIPlaylist, string> PlaylistIdToName({
-	{ PLAYLIST_UNKNOWN, "Unknown" },
-	{ PLAYLIST_DUEL, "Casual 1v1" },
-	{ PLAYLIST_DOUBLES, "Casual 2v2" },
-	{ PLAYLIST_STANDARD, "Casual 3v3" },
-	{ PLAYLIST_CHAOS, "Casual 4v4" },
-	{ PLAYLIST_RANKEDDUEL, "1v1" },
-	{ PLAYLIST_RANKEDDOUBLES, "2v2" },
-	{ PLAYLIST_RANKEDSTANDARD, "3v3" },
-	{ PLAYLIST_RANKEDHOOPS, "Hoops" },
-	{ PLAYLIST_RANKEDRUMBLE, "Rumble" },
-	{ PLAYLIST_RANKEDDROPSHOT, "Dropshot" },
-	{ PLAYLIST_RANKEDSNOWDAY, "Snowday" },
-	{ PLAYLIST_CASUAL, "Casual" }
+	{ StreamAPIPlaylist::UNKNOWN, "Unknown" },
+	{ StreamAPIPlaylist::DUEL, "Casual 1v1" },
+	{ StreamAPIPlaylist::DOUBLES, "Casual 2v2" },
+	{ StreamAPIPlaylist::STANDARD, "Casual 3v3" },
+	{ StreamAPIPlaylist::CHAOS, "Casual 4v4" },
+	{ StreamAPIPlaylist::RANKEDDUEL, "1v1" },
+	{ StreamAPIPlaylist::RANKEDDOUBLES, "2v2" },
+	{ StreamAPIPlaylist::RANKEDSTANDARD, "3v3" },
+	{ StreamAPIPlaylist::RANKEDHOOPS, "Hoops" },
+	{ StreamAPIPlaylist::RANKEDRUMBLE, "Rumble" },
+	{ StreamAPIPlaylist::RANKEDDROPSHOT, "Dropshot" },
+	{ StreamAPIPlaylist::RANKEDSNOWDAY, "Snowday" },
+	{ StreamAPIPlaylist::CASUAL, "Casual" }
 	});
 
-StreamAPIPlaylist casualRetrievalPlaylist = PLAYLIST_DUEL;
+StreamAPIPlaylist casualRetrievalPlaylist = StreamAPIPlaylist::DUEL;
 
 unordered_set<StreamAPIPlaylist> casualPlaylists({
-	PLAYLIST_DUEL,
-	PLAYLIST_DOUBLES,
-	PLAYLIST_STANDARD,
-	PLAYLIST_CHAOS });
+	StreamAPIPlaylist::DUEL,
+	StreamAPIPlaylist::DOUBLES,
+	StreamAPIPlaylist::STANDARD,
+	StreamAPIPlaylist::CHAOS
+	});
 
 vector<StreamAPIPlaylist> playlistsToRetrieve({
-	PLAYLIST_RANKEDDUEL,
-	PLAYLIST_RANKEDDOUBLES,
-	PLAYLIST_RANKEDSTANDARD,
-	PLAYLIST_RANKEDHOOPS,
-	PLAYLIST_RANKEDRUMBLE,
-	PLAYLIST_RANKEDDROPSHOT,
-	PLAYLIST_RANKEDSNOWDAY,
+	StreamAPIPlaylist::RANKEDDUEL,
+	StreamAPIPlaylist::RANKEDDOUBLES,
+	StreamAPIPlaylist::RANKEDSTANDARD,
+	StreamAPIPlaylist::RANKEDHOOPS,
+	StreamAPIPlaylist::RANKEDRUMBLE,
+	StreamAPIPlaylist::RANKEDDROPSHOT,
+	StreamAPIPlaylist::RANKEDSNOWDAY,
 	casualRetrievalPlaylist,
 	});
 
 std::unordered_map<std::string, StreamAPIPlaylist> playlistArgToId({
-	{ "casuals", PLAYLIST_CASUAL },
-	{ "casual", PLAYLIST_CASUAL },
-	{ "unrank", PLAYLIST_CASUAL },
-	{ "unranked", PLAYLIST_CASUAL },
+	{ "casuals", StreamAPIPlaylist::CASUAL },
+	{ "casual", StreamAPIPlaylist::CASUAL },
+	{ "unrank", StreamAPIPlaylist::CASUAL },
+	{ "unranked", StreamAPIPlaylist::CASUAL },
 
-	{ "ones", PLAYLIST_RANKEDDUEL },
-	{ "1s", PLAYLIST_RANKEDDUEL },
-	{ "1v1", PLAYLIST_RANKEDDUEL },
-	{ "1v1s", PLAYLIST_RANKEDDUEL },
-	{ "duel", PLAYLIST_RANKEDDUEL },
+	{ "ones", StreamAPIPlaylist::RANKEDDUEL },
+	{ "1s", StreamAPIPlaylist::RANKEDDUEL },
+	{ "1v1", StreamAPIPlaylist::RANKEDDUEL },
+	{ "1v1s", StreamAPIPlaylist::RANKEDDUEL },
+	{ "duel", StreamAPIPlaylist::RANKEDDUEL },
 
-	{ "twos", PLAYLIST_RANKEDDOUBLES },
-	{ "2s", PLAYLIST_RANKEDDOUBLES },
-	{ "2v2", PLAYLIST_RANKEDDOUBLES },
-	{ "2v2s", PLAYLIST_RANKEDDOUBLES },
-	{ "doubles", PLAYLIST_RANKEDDOUBLES },
+	{ "twos", StreamAPIPlaylist::RANKEDDOUBLES },
+	{ "2s", StreamAPIPlaylist::RANKEDDOUBLES },
+	{ "2v2", StreamAPIPlaylist::RANKEDDOUBLES },
+	{ "2v2s", StreamAPIPlaylist::RANKEDDOUBLES },
+	{ "doubles", StreamAPIPlaylist::RANKEDDOUBLES },
 
-	{ "threes", PLAYLIST_RANKEDSTANDARD },
-	{ "3s", PLAYLIST_RANKEDSTANDARD },
-	{ "3v3", PLAYLIST_RANKEDSTANDARD },
-	{ "3v3s", PLAYLIST_RANKEDSTANDARD },
-	{ "standard", PLAYLIST_RANKEDSTANDARD },
+	{ "threes", StreamAPIPlaylist::RANKEDSTANDARD },
+	{ "3s", StreamAPIPlaylist::RANKEDSTANDARD },
+	{ "3v3", StreamAPIPlaylist::RANKEDSTANDARD },
+	{ "3v3s", StreamAPIPlaylist::RANKEDSTANDARD },
+	{ "standard", StreamAPIPlaylist::RANKEDSTANDARD },
 
-	{ "hoops", PLAYLIST_RANKEDHOOPS },
-	{ "rumble", PLAYLIST_RANKEDRUMBLE },
-	{ "dropshot", PLAYLIST_RANKEDDROPSHOT },
-	{ "snowday", PLAYLIST_RANKEDSNOWDAY },
-	{ "hockey", PLAYLIST_RANKEDSNOWDAY },
+	{ "hoops", StreamAPIPlaylist::RANKEDHOOPS },
+	{ "rumble", StreamAPIPlaylist::RANKEDRUMBLE },
+	{ "dropshot", StreamAPIPlaylist::RANKEDDROPSHOT },
+	{ "snowday", StreamAPIPlaylist::RANKEDSNOWDAY },
+	{ "hockey", StreamAPIPlaylist::RANKEDSNOWDAY },
 	});
 
 std::vector<string> tierToRankName({
@@ -123,10 +106,10 @@ void Ranks::getRanks(std::shared_ptr<GameWrapper> gw)
 	auto mmrWrapper = gw->GetMMRWrapper();
 
 	for (auto p : playlistsToRetrieve) {
-		auto mmr = round(mmrWrapper.GetPlayerMMR(UID, p));
-		auto rank = mmrWrapper.GetPlayerRank(UID, p);
+		auto mmr = round(mmrWrapper.GetPlayerMMR(UID, (int) p));
+		auto rank = mmrWrapper.GetPlayerRank(UID, (int) p);
 
-		auto playlistName = PlaylistIdToName[p == casualRetrievalPlaylist ? PLAYLIST_CASUAL : p];
+		auto playlistName = PlaylistIdToName[p == casualRetrievalPlaylist ? StreamAPIPlaylist::CASUAL : p];
 		auto tierName = tierToRankName[rank.Tier];
 
 		stringstream oss;
@@ -163,7 +146,7 @@ std::string Ranks::toString(std::string args, std::shared_ptr<CVarManagerWrapper
 		oss << "{";
 		bool isFirst = true;
 		for (auto playlistId : playlistsToRetrieve) {
-			auto playlistName = PlaylistIdToName[playlistId == casualRetrievalPlaylist ? PLAYLIST_CASUAL : playlistId];
+			auto playlistName = PlaylistIdToName[playlistId == casualRetrievalPlaylist ? StreamAPIPlaylist::CASUAL : playlistId];
 
 			auto it = ranks.find(playlistId);
 			if (it != ranks.end()) {
@@ -193,7 +176,7 @@ std::string Ranks::toString(std::string args, std::shared_ptr<CVarManagerWrapper
 			}
 			
 			auto playlistId = it->second;
-			if (playlistId == PLAYLIST_CASUAL) {
+			if (playlistId == StreamAPIPlaylist::CASUAL) {
 				playlistId = casualRetrievalPlaylist;
 			}
 

@@ -11,6 +11,8 @@ using namespace std;
 using json = nlohmann::json;
 namespace fs = std::filesystem;
 
+std::vector<std::string> mapExtensions({ ".udk", ".upk", ".umap" });
+
 fs::path getSteamRLInstallPath()
 {
 	winreg::RegKey key{ HKEY_CURRENT_USER, L"SOFTWARE\\Valve\\Steam" };
@@ -371,21 +373,33 @@ std::string CustomMapSupport::toString()
 
 void CustomMapSupport::loadMapsFromJson(nlohmann::json& j)
 {
+	// TODO: Scraper script should combine lethamyr and workshop maps if they match?
 	_globalCvarManager->log("CustomMapSupport: Doing full parse of maps.json");
 	try {
 		j.at("maps").get_to(workshopIdToMap);
 		for (auto it = workshopIdToMap.begin(); it != workshopIdToMap.end(); ++it) {
-			for (auto it2 = it->second.mapFileHistory.begin(); it2 != it->second.mapFileHistory.end(); ++it2) {
-				// Update hash to maps
-				auto hashIt = hashToAllMaps.find(it2->fullHash);
-				if (hashIt == hashToAllMaps.end() || hashIt->second.published > it->second.published) {
-					hashToAllMaps[it2->fullHash] = it->second;
+			if (it->second.type == CustomMapType::WORKSHOP) {
+				for (auto it2 = it->second.mapFileHistory.begin(); it2 != it->second.mapFileHistory.end(); ++it2) {
+					auto hashIt = hashToAllMaps.find(it2->fullHash);
+					if (hashIt == hashToAllMaps.end() || hashIt->second.published > it->second.published) {
+						hashToAllMaps.emplace(it2->fullHash, it->second);
+					}
+
+					auto filenameIt = filenameToAllMaps.find(it2->filename);
+					if (filenameIt == filenameToAllMaps.end() || filenameIt->second.published > it->second.published) {
+						filenameToAllMaps.emplace(it2->filename, it->second);
+					}
+				}
+			}
+			else {
+				auto hashIt = hashToAllMaps.find(it->second.fullHash);
+				if (hashIt == hashToAllMaps.end()) {
+					hashToAllMaps.emplace(it->second.fullHash, it->second);
 				}
 
-				// Update filename to maps
-				auto filenameIt = filenameToAllMaps.find(it2->filename);
-				if (filenameIt == filenameToAllMaps.end() || filenameIt->second.published > it->second.published) {
-					filenameToAllMaps[it2->filename] = it->second;
+				auto filenameIt = filenameToAllMaps.find(it->second.filename);
+				if (filenameIt == filenameToAllMaps.end()) {
+					hashToAllMaps.emplace(it->second.filename, it->second);
 				}
 			}
 		}
@@ -397,7 +411,13 @@ void CustomMapSupport::loadMapsFromJson(nlohmann::json& j)
 
 void CustomMapSupport::updateByMap(CustomMap& map)
 {
-	loadedMapDetails = map.title + " created by " + map.author + " can be downloaded at https://steamcommunity.com/sharedfiles/filedetails/?id=" + map.workshopId;
+	if (map.type == CustomMapType::WORKSHOP) {
+		loadedMapDetails = map.title + " created by " + map.author +
+			" can be downloaded at https://steamcommunity.com/sharedfiles/filedetails/?id=" + map.workshopId;
+	}
+	else {
+		loadedMapDetails = map.title + " created by " + map.author + " can be downloaded at " + map.link;
+	}
 }
 
 bool CustomMapSupport::updateByWorkshopId(std::string workshopId)
@@ -410,19 +430,27 @@ bool CustomMapSupport::updateByWorkshopId(std::string workshopId)
 
 bool CustomMapSupport::updateByFilename(std::string filename, bool forced)
 {
-	// TODO: If there isn't an extension, try them all
-	auto it = filenameToAllMaps.find(filename);
-	if (it == filenameToAllMaps.end()) {
-		if (forced) {
-			loadedMapDetails = filename + " (failed to identify workshop info)";
-			return true;
-		}
-		else {
-			return false;
+	vector<string> possibleFilenames;
+	if (fs::path(filename).has_extension()) {
+		possibleFilenames.push_back(filename);
+	}
+	else {
+		for (auto& extension : mapExtensions) {
+			possibleFilenames.push_back(filename + extension);
 		}
 	}
 
-	updateByMap(it->second);
+	for (auto& fname : possibleFilenames) {
+		auto it = filenameToAllMaps.find(fname);
+		if (it != filenameToAllMaps.end()) {
+			updateByMap(it->second);
+			return true;
+		}
+	}
+
+	if (!forced) return false;
+
+	loadedMapDetails = filename + " (failed to identify workshop info)";
 	return true;
 }
 
@@ -475,18 +503,25 @@ bool CustomMapSupport::updateByHash(std::filesystem::path path)
 	return matched;
 }
 
-vector<string> mapExtensions({ ".udk", ".upk", ".umap" });
-
 std::filesystem::path CustomMapSupport::findAbsolutePath(std::filesystem::path path)
 {
 	if (path.is_absolute()) return path;
 
-	// Make a best effort approach to finding the map's file location
+	// Make a best effort to find the map's file location
 
-	// TODO: We shouldn't add an extension if there is one already
-	for (auto& extension : mapExtensions) {
+	vector<fs::path> possibleFilenames;
+	if (path.has_extension()) {
+		possibleFilenames.push_back(path.filename());
+	}
+	else {
+		for (auto& extension : mapExtensions) {
+			possibleFilenames.push_back(path.stem().string() + extension);
+		}
+	}
+
+	for (auto& fname : possibleFilenames) {
 		for (auto& d : customMapsDirs) {
-			auto p = d / (path.stem().string() + extension);
+			auto p = d / fname;
 			if (fs::exists(p)) {
 				return p;
 			}
@@ -494,12 +529,21 @@ std::filesystem::path CustomMapSupport::findAbsolutePath(std::filesystem::path p
 	}
 
 	if (!workshopDir.empty()) {
-		for (auto& extension : mapExtensions) {
+		for (auto& fname : possibleFilenames) {
 			for (auto& d : fs::directory_iterator(workshopDir)) {
-				auto p = d.path() / (path.stem().string() + extension);
+				auto p = d.path() / fname;
 				if (fs::exists(p)) {
 					return p;
 				}
+			}
+		}
+	}
+
+	for (auto& fname : possibleFilenames) {
+		for (auto& d : standardMapsDir) {
+			auto p = d / fname;
+			if (fs::exists(p)) {
+				return p;
 			}
 		}
 	}
@@ -508,14 +552,14 @@ std::filesystem::path CustomMapSupport::findAbsolutePath(std::filesystem::path p
 	return path;
 }
 
-void from_json(const json& j, CustomMapFile& mapFile)
+void from_json(const json& j, WorkshopMapFile& mapFile)
 {
 	j.at("filename").get_to(mapFile.filename);
 	j.at("fullHash").get_to(mapFile.fullHash);
 	j.at("updateTimestamp").get_to(mapFile.updateTimestamp);
 }
 
-void from_json(const json& j, CustomMap& map)
+void from_json_workshopMap(const json& j, CustomMap& map)
 {
 	j.at("workshopId").get_to(map.workshopId);
 	j.at("author").get_to(map.author);
@@ -530,4 +574,26 @@ void from_json(const json& j, CustomMap& map)
 			map.lastUpdated = mapFile.updateTimestamp;
 		}
 	}	
+}
+
+void from_json_lethamyrMap(const json& j, CustomMap& map)
+{
+	j.at("author").get_to(map.author);
+	j.at("title").get_to(map.title);
+	j.at("desc").get_to(map.description);
+	j.at("link").get_to(map.link);
+	j.at("filename").get_to(map.filename);
+	j.at("fullHash").get_to(map.fullHash);
+}
+
+void from_json(const json& j, CustomMap& map)
+{
+	if (j.find("link") != j.end()) {
+		map.type = CustomMapType::LETHAMYR;
+		from_json_lethamyrMap(j, map);
+	}
+	else {
+		map.type = CustomMapType::WORKSHOP;
+		from_json_workshopMap(j, map);
+	}
 }

@@ -10,12 +10,12 @@
 #include <unordered_set>
 #include <vector>
 
-enum ItemType {
-	NONE = 0,
-	IN_GAME = 1,
-	BAKKESMOD = 2,
-	ALPHA_CONSOLE = 3,
-	RAINBOW_PLUGIN = 4,
+enum class ItemType {
+	NONE,
+	IN_GAME,
+	BAKKESMOD,
+	ALPHA_CONSOLE,
+	RAINBOW_PLUGIN,
 };
 
 // TODO: Replace these by using PaintDatabase and CertifiedStatDatabase
@@ -46,7 +46,7 @@ struct RGBColor {
 };
 
 struct LoadoutItem {
-	ItemType type = NONE;
+	ItemType type = ItemType::NONE;
 	int productId;
 	unsigned long long instanceId;
 	uint8_t paintId;
@@ -63,7 +63,7 @@ struct LoadoutItem {
 };
 
 struct PaintItem {
-	ItemType type = NONE;
+	ItemType type = ItemType::NONE;
 	int paintId;
 	uint8_t r;
 	uint8_t g;

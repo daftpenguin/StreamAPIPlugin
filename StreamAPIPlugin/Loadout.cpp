@@ -463,7 +463,7 @@ std::string Loadout::toBMCode()
 	bmLoadout.body.blueColor.should_override = true; // We can't set the in game paint color, so we'll use the RGB for all cases.
 
 	// Do paints
-	if (primaryPaint.type == BAKKESMOD || primaryPaint.type == IN_GAME) {
+	if (primaryPaint.type == ItemType::BAKKESMOD || primaryPaint.type == ItemType::IN_GAME) {
 		bmLoadout.body.blueColor.primary_colors = { primaryPaint.r, primaryPaint.g, primaryPaint.b };
 		bmLoadout.body.blueColor.secondary_colors = { accentPaint.r, accentPaint.g, accentPaint.b };
 	}
@@ -510,7 +510,7 @@ std::string Loadout::toString()
 	oss << "Loadout:\n"
 		<< "\tBody: " << body.toString() << endl
 		<< "\tPrimary: Paint: " << primaryPaint.toString(true) << ", Finish: " << primaryFinish.toString() << endl;
-	if (accentFinish.toString().compare("None") != 0 || decal.type == ALPHA_CONSOLE) {
+	if (accentFinish.toString().compare("None") != 0 || decal.type == ItemType::ALPHA_CONSOLE) {
 		oss << "\tAccent: Paint: " << accentPaint.toString(false) << ", Finish: " << accentFinish.toString() << endl;
 	}
 	oss << "\tDecal: " << decal.toString() << endl
@@ -530,7 +530,7 @@ std::string Loadout::getItemString(std::string itemType, std::string outputSepar
 		stringstream oss;
 		oss << "{\"body\":" << quoted(body.toString()) << ","
 			<< "\"primary\":{\"paint\":" << quoted(primaryPaint.toString(true)) << ",\"finish\":" << quoted(primaryFinish.toString()) << "},";
-		if (accentFinish.toString().compare("None") != 0 || decal.type == ALPHA_CONSOLE) {
+		if (accentFinish.toString().compare("None") != 0 || decal.type == ItemType::ALPHA_CONSOLE) {
 			oss << "\"accent\":{\"paint\":" << quoted(accentPaint.toString(false)) << ",\"finish\":" << quoted(accentFinish.toString()) << "},";
 		}
 		oss << "\"decal\":" << quoted(decal.toString()) << ","
@@ -600,7 +600,7 @@ std::string Loadout::getItemString(std::string itemType, std::string outputSepar
 
 void LoadoutItem::clear()
 {
-	this->type = NONE;
+	this->type = ItemType::NONE;
 	this->instanceId = 0;
 	this->productId = 0;
 	this->paintId = 0;
@@ -671,7 +671,7 @@ void LoadoutItem::fromItem(unsigned long long id, bool isOnline, std::shared_ptr
 	}
 
 	this->instanceId = id;
-	this->type = BAKKESMOD;
+	this->type = ItemType::BAKKESMOD;
 }
 
 void LoadoutItem::fromBMItem(BM::Item item, std::shared_ptr<GameWrapper> gw)
@@ -685,7 +685,7 @@ void LoadoutItem::fromBMItem(BM::Item item, std::shared_ptr<GameWrapper> gw)
 
 	this->instanceId = item.product_id;
 	this->paintId = item.paint_index;
-	this->type = BAKKESMOD;
+	this->type = ItemType::BAKKESMOD;
 
 	stringstream ss;
 	
@@ -750,7 +750,7 @@ void LoadoutItem::fromAlphaConsolePlugin(std::shared_ptr<CVarManagerWrapper> cva
 			return;
 		}
 
-		this->type = ALPHA_CONSOLE;
+		this->type = ItemType::ALPHA_CONSOLE;
 		this->itemString = "AlphaConsole: " + texture;
 		if (reactive) {
 			this->itemString += " (Reactive: " + reactiveMultiplier + "x)";
@@ -775,7 +775,7 @@ std::string LoadoutItem::toString()
 
 void PaintItem::clear()
 {
-	this->type = NONE;
+	this->type = ItemType::NONE;
 	this->paintId = 0;
 	this->itemString = "";
 }
@@ -786,7 +786,7 @@ void PaintItem::fromPaintId(int paintId, bool isPrimary, const vector<RGBColor>&
 	if (paintId < colorSet.size()) {
 		auto color = colorSet.at(paintId);
 
-		this->type = IN_GAME;
+		this->type = ItemType::IN_GAME;
 		this->paintId = paintId;
 		this->r = color.r;
 		this->g = color.g;
@@ -800,7 +800,7 @@ void PaintItem::fromBMPaint(BM::RGB paint)
 	this->r = paint.r;
 	this->g = paint.g;
 	this->b = paint.b;
-	this->type = BAKKESMOD;
+	this->type = ItemType::BAKKESMOD;
 	this->itemString = "BM: (R: " + to_string(this->r) + ", G: " + to_string(this->g) + ", B: " + to_string(this->b) + ")";
 }
 
@@ -822,7 +822,7 @@ void PaintItem::fromRainbowPlugin(std::shared_ptr<CVarManagerWrapper> cvarManage
 		return;
 	}
 
-	this->type = RAINBOW_PLUGIN;
+	this->type = ItemType::RAINBOW_PLUGIN;
 	this->reverse = cvarReverse.getBoolValue();
 	this->saturation = cvarSaturation.getFloatValue();
 	this->speed = cvarSpeed.getFloatValue();
