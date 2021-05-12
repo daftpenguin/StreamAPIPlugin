@@ -221,10 +221,10 @@ void StreamAPIPlugin::getSens()
 
 	gameWrapper->GetSettings();
 	auto gp = gameWrapper->GetSettings().GetGamepadSettings();
-	oss << "Steering: " << gp.SteeringSensitivity
-		<< outputSeparator << "Aerial: " << gp.AirControlSensitivity
-		<< outputSeparator << "Deadzone: " << gp.ControllerDeadzone
-		<< outputSeparator << "Dodge Deadzone: " << gp.DodgeInputThreshold;
+	oss << "Steering: " << fixed << gp.SteeringSensitivity
+		<< outputSeparator << "Aerial: " << fixed << gp.AirControlSensitivity
+		<< outputSeparator << "Deadzone: " << fixed << gp.ControllerDeadzone
+		<< outputSeparator << "Dodge Deadzone: " << fixed << gp.DodgeInputThreshold;
 	sensStr = oss.str();
 
 	if (sensStr.compare(oldSensStr) != 0) {
@@ -245,9 +245,9 @@ void StreamAPIPlugin::getCamera()
 		<< outputSeparator << "Distance: " << (int) camera.Distance
 		<< outputSeparator << "Height: " << (int) camera.Height
 		<< outputSeparator << "Angle: " << (int) camera.Pitch
-		<< outputSeparator << "Stiffness: " << camera.Stiffness
-		<< outputSeparator << "Swivel: " << camera.SwivelSpeed
-		<< outputSeparator << "Transition: " << camera.TransitionSpeed;
+		<< outputSeparator << "Stiffness: " << fixed << camera.Stiffness
+		<< outputSeparator << "Swivel: " << fixed << camera.SwivelSpeed
+		<< outputSeparator << "Transition: " << fixed << camera.TransitionSpeed;
 	cameraStr = oss.str();
 
 	if (cameraStr.compare(oldCameraStr) != 0) {
@@ -278,7 +278,7 @@ std::map<int, std::string> windowModeToName({
 	});
 
 std::map<std::string, std::string> videoOptionsRename({
-	{ "RanderDetail", "Render Detail" }
+	{ "RenderDetail", "Render Detail" }
 	});
 
 void StreamAPIPlugin::getVideo()
