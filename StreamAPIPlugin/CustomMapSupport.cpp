@@ -82,6 +82,11 @@ fs::path getEpicRLInstallPath()
 		return fs::path();
 	}
 
+	if (!fs::exists(epicManifestsDir)) {
+		_globalCvarManager->log("CustomMapSupport: Found epic in registry, but manifests directory doesn't exist");
+		return fs::path();
+	}
+
 	for (auto& p : fs::directory_iterator(epicManifestsDir)) {
 		if (p.is_directory()) continue;
 
@@ -537,7 +542,7 @@ std::filesystem::path CustomMapSupport::findAbsolutePath(std::filesystem::path p
 		}
 	}
 
-	if (!workshopDir.empty()) {
+	if (!workshopDir.empty() && fs::exists(workshopDir)) {
 		for (auto& fname : possibleFilenames) {
 			for (auto& d : fs::directory_iterator(workshopDir)) {
 				auto p = d.path() / fname;
