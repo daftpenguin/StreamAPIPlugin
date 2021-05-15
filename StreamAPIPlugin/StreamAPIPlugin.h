@@ -24,7 +24,6 @@
 #include "fmt/ranges.h"
 
 extern std::shared_ptr<CVarManagerWrapper> _globalCvarManager;
-extern int _globalBMVersion;
 
 constexpr auto plugin_version = stringify(VERSION_MAJOR) "." stringify(VERSION_MINOR) "." stringify(VERSION_PATCH); // "." stringify(VERSION_BUILD);
 

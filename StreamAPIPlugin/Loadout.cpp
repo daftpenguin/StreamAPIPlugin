@@ -902,11 +902,6 @@ void Loadout::fromLoadoutWrapper(int teamNum, std::shared_ptr<CVarManagerWrapper
 
 	auto lw = iw.GetCurrentLoadout(teamNum);
 
-	if (_globalBMVersion <= 141) {
-		cv->log("BMVersion <= 141, fixing loadout dereference");
-		lw = LoadoutWrapper(*reinterpret_cast<uintptr_t*>(lw.memory_address));
-	}
-
 	auto items = lw.GetLoadout();
 	auto onlineItems = lw.GetOnlineLoadout();
 

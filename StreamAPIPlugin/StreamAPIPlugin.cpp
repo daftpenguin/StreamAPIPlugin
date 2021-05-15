@@ -21,7 +21,6 @@ namespace fs = std::filesystem;
 BAKKESMOD_PLUGIN(StreamAPIPlugin, "Stream API Plugin", plugin_version, PLUGINTYPE_FREEPLAY)
 
 std::shared_ptr<CVarManagerWrapper> _globalCvarManager;
-int _globalBMVersion = 0;
 
 
 void StreamAPIPlugin::onLoad()
@@ -37,19 +36,6 @@ void StreamAPIPlugin::onLoad()
 	customMapSupport.init(gameWrapper->IsUsingSteamVersion(), gameWrapper->GetDataFolder() / "streamapi" / "maps.json");
 	
 	cvarManager->registerNotifier("streamapi_dump", bind(&StreamAPIPlugin::onDump, this, std::placeholders::_1), "dumps loadout data to console", PERMISSION_ALL);
-
-	ifstream fin(gameWrapper->GetBakkesModPath() / "version.txt", ios::in);
-	if (fin.is_open()) {
-		string line;
-		getline(fin, line);
-		try {
-			_globalBMVersion = stoi(line);
-		}
-		catch (int e) {
-			_globalBMVersion = 0;
-			cvarManager->log("Failed to read BakkesMod version from version.txt. Plugin will not work.");
-		}
-	}
 
 	cvarManager->registerNotifier("streamapi_reload_token", [this](vector<string> params) {
 		webSocket.loadTokenFromFile(tokenFile);
@@ -186,9 +172,6 @@ void StreamAPIPlugin::toggleBotSupport()
 
 void StreamAPIPlugin::getLoadout()
 {
-	if (_globalBMVersion == 0)
-		return;
-
 	cvarManager->log("Updating loadout");
 
 	bool teamNum = previewTeamNum;
