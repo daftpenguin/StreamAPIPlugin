@@ -15,11 +15,15 @@ std::vector<std::string> mapExtensions({ ".udk", ".upk", ".umap" });
 
 fs::path getSteamRLInstallPath()
 {
-	winreg::RegKey key{ HKEY_CURRENT_USER, L"SOFTWARE\\Valve\\Steam" };
-	wstring steamPathStr = key.GetStringValue(L"SteamPath");
+	wstring steamPathStr;
+	try {
+		winreg::RegKey key{ HKEY_CURRENT_USER, L"SOFTWARE\\Valve\\Steam" };
+		steamPathStr = key.GetStringValue(L"SteamPath");
+	}
+	catch (...) {}
 
 	if (steamPathStr.empty()) {
-		_globalCvarManager->log("CustomMapSupport: Steam not installed");
+		_globalCvarManager->log("CustomMapSupport: Steam version not installed");
 		return fs::path();
 	}
 
@@ -66,10 +70,15 @@ fs::path getSteamRLInstallPath()
 
 fs::path getEpicRLInstallPath()
 {
-	winreg::RegKey key{ HKEY_CURRENT_USER, L"SOFTWARE\\Epic Games\\EOS" };
-	wstring epicManifestsDir = key.GetStringValue(L"ModSdkMetadataDir");
+	wstring epicManifestsDir;
+	try {
+		winreg::RegKey key{ HKEY_CURRENT_USER, L"SOFTWARE\\Epic Games\\EOS" };
+		epicManifestsDir = key.GetStringValue(L"ModSdkMetadataDir");
+	}
+	catch (...) {}
 
 	if (epicManifestsDir.empty()) {
+		_globalCvarManager->log("CustomMapSupport: Epic version not installed");
 		return fs::path();
 	}
 
