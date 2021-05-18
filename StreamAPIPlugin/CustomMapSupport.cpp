@@ -262,59 +262,6 @@ void CustomMapSupport::init(bool isSteamVersion, std::filesystem::path mapsJsonP
 	initialized = true;
 }
 
-unordered_set<wstring> ignoredMapNames({
-	L"arc_p",
-	L"arc_standard_p",
-	L"bb_p",
-	L"beach_night_p",
-	L"beach_p",
-	L"chn_stadium_day_p",
-	L"chn_stadium_p",
-	L"cs_day_p",
-	L"cs_hw_p",
-	L"cs_p",
-	L"eurostadium_night_p",
-	L"eurostadium_p",
-	L"eurostadium_rainy_p",
-	L"eurostadium_snownight_p",
-	L"farm_night_p",
-	L"farm_p",
-	L"haunted_trainstation_p",
-	L"hoopsstadium_p",
-	L"menu_main_p",
-	L"music_p",
-	L"neotokyo_p",
-	L"neotokyo_standard_p",
-	L"park_night_p",
-	L"park_p",
-	L"park_rainy_p",
-	L"shattershot_p",
-	L"stadium_day_p",
-	L"stadium_foggy_p",
-	L"stadium_p",
-	L"stadium_race_day_p",
-	L"stadium_winter_p",
-	L"throwbackhockey_p",
-	L"throwbackstadium_p",
-	L"trainstation_dawn_p",
-	L"trainstation_night_p",
-	L"trainstation_p",
-	L"trainstation_spooky_p",
-	L"underwater_p",
-	L"utopiastadium_dusk_p",
-	L"utopiastadium_p",
-	L"utopiastadium_snow_p",
-	L"wasteland_art_night_p",
-	L"wasteland_art_night_s_p",
-	L"wasteland_art_p",
-	L"wasteland_art_s_p",
-	L"wasteland_night_p",
-	L"wasteland_night_s_p",
-	L"wasteland_night_vfx_p",
-	L"wasteland_p",
-	L"wasteland_s_p"
-	});
-
 unordered_set<wstring> mapReplacementMaps({
 	L"labs_basin_p",
 	L"labs_circlepillars_p",
@@ -338,14 +285,12 @@ void CustomMapSupport::updateMap(std::wstring mapName)
 		loadedMapDetails = "Maps data not initialized yet";
 	}
 	else {
-		if (ignoredMapNames.find(boost::to_lower_copy(mapName)) != ignoredMapNames.end()) {
+		if (fs::exists(standardMapsDir / (mapName + L".upk"))) {
+			if (mapReplacementMaps.find(boost::to_lower_copy(mapName)) != mapReplacementMaps.end()) {
+				updateByHash(standardMapsDir / (mapName + L".upk"));
+			}
 			return;
-		}
-
-		if (mapReplacementMaps.find(boost::to_lower_copy(mapName)) != mapReplacementMaps.end()) {
-			updateByHash(standardMapsDir / (mapName + L".upk"));
-			return;
-		}
+		}		
 
 		fs::path path(mapName);
 		if (updateByFilename(path.filename().string(), false)) {
