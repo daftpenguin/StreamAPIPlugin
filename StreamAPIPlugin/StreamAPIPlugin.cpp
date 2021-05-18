@@ -109,10 +109,17 @@ void StreamAPIPlugin::onLoad()
 	webSocket.setData("workshop", customMapSupport.toString());
 
 	mmrNotifierToken = gameWrapper->GetMMRWrapper().RegisterMMRNotifier([this](UniqueIDWrapper id) {
-		if (id == gameWrapper->GetUniqueID()) {
-			ranks.updateRank(gameWrapper);
+		// Workaround since Epic version doesn't appear to get MMR notifications for local user
+		if (updateRankOnNextNotification) {
+			updateRankOnNextNotification = false;
+			ranks.getRanks(gameWrapper);
 			webSocket.setData("rank", ranks.toString("json", cvarManager));
 		}
+
+		/*if (id.GetIdString().compare(gameWrapper->GetUniqueID().GetIdString()) == 0) {
+			ranks.updateRank(gameWrapper);
+			webSocket.setData("rank", ranks.toString("json", cvarManager));
+		}*/
 		});
 	
 	gameWrapper->SetTimeout([this](GameWrapper* gw) { // Doesn't appear to update when ranks are initially retrieved
@@ -138,6 +145,7 @@ void StreamAPIPlugin::onLoad()
 			webSocket.setData("workshop", newMapStr);
 		}
 		});
+	gameWrapper->HookEventPost(RANKS_UPDATE_EVENT, [this](string eventName) { updateRankOnNextNotification = true; });
 
 	commandNameToCommand["loadout"] = std::bind(&StreamAPIPlugin::loadoutCommand, this, std::placeholders::_1);
 	commandNameToCommand["sens"] = std::bind(&StreamAPIPlugin::sensCommand, this, std::placeholders::_1);

@@ -48,6 +48,7 @@ const std::string VIDEO_CHANGED_EVENTS[] = {
 
 const std::string CAMERA_INVERT_SWIVEL_CHANGED_EVENT = "Function TAGame.GFxData_Settings_TA.SetInvertSwivelPitch";
 const std::string CAMERA_SHAKE_CHANGED_EVENT = "Function TAGame.GFxData_Settings_TA.SetCameraShake";
+const std::string RANKS_UPDATE_EVENT = "Function TAGame.GameEvent_Soccar_TA.EventMatchWinnerSet";
 
 const short BAKKESMOD_VERSION = 140;
 
@@ -84,6 +85,7 @@ private:
 
 	std::unique_ptr<MMRNotifierToken> mmrNotifierToken;
 	Ranks ranks;
+	bool updateRankOnNextNotification = false;
 	
 	CustomMapSupport customMapSupport;
 
