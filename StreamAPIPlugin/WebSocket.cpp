@@ -17,6 +17,7 @@ WebSocket::WebSocket() : isRunning(false), token(""), status(WebSocketStatus::ST
 	data.emplace("training", WebSocketDataField("training"));
 	data.emplace("rank", WebSocketDataField("rank"));
 	data.emplace("workshop", WebSocketDataField("workshop"));
+	data.emplace("map", WebSocketDataField("map"));
 
 	srand(time(NULL));
 }
@@ -56,6 +57,11 @@ bool WebSocket::setToken(std::string token)
 	}
 	setStatus(WebSocketStatus::BAD_TOKEN, "Stopped", "Bad token configured");
 	return false;
+}
+
+std::string WebSocket::getToken()
+{
+	return token;
 }
 
 void WebSocket::start()

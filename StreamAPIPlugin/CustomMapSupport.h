@@ -15,6 +15,8 @@
 #include "nlohmann/json.hpp"
 
 const int READ_FILE_CHUNK_SIZE = 1000000;
+const std::wstring DEFAULT_STEAM_INSTALLATION_PATH = L"C:\\Program Files (x86)\\Steam";
+const std::wstring DEFAULT_EPIC_INSTALLATION_PATH = L"C:\\ProgramData\\Epic\\EpicGamesLauncher\\Data\\Manifests";
 
 enum class CustomMapType {
 	WORKSHOP,
@@ -55,12 +57,15 @@ public:
 	CustomMapSupport();
 	void init(bool isSteamVersion, std::filesystem::path mapsJsonPath);
 	void updateMap(std::wstring mapName);
-	std::string toString();
+	std::string getCustomMap();
+	std::string getMap();
 
 private:
 	void loadMapsFromJson(nlohmann::json& j);
 
+	bool updateCustomMap(std::wstring mapName);
 	void updateByMap(CustomMap& map);
+	int updateIfCookedPCMap(std::wstring mapName);
 	bool updateByWorkshopId(std::string workshopId);
 	bool updateByFilename(std::string filename, bool forced);
 	bool updateByHash(std::filesystem::path path);
@@ -75,6 +80,7 @@ private:
 	std::unordered_map<std::string, CustomMap> filenameToAllMaps;
 
 	std::string loadedMapDetails;
+	std::string loadedCustomMapDetails;
 	std::atomic<bool> initialized;
 
 	std::filesystem::path standardMapsDir;

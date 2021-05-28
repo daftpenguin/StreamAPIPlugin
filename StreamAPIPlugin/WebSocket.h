@@ -48,6 +48,7 @@ class WebSocket
 public:
 	WebSocket();
 	bool setToken(std::string token);
+	std::string getToken();
 	void start();
 	void stop();
 	void setData(std::string fieldName, std::string data);

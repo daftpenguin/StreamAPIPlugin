@@ -6,6 +6,8 @@
 #include <string>
 #include <filesystem>
 
+#include <boost/thread.hpp>
+
 using namespace std;
 namespace fs = std::filesystem;
 
@@ -106,20 +108,24 @@ void StreamAPIPlugin::onLoad()
 	getVideo();
 	getTrainingPack();
 	ranks.getRanks(gameWrapper);
-	webSocket.setData("workshop", customMapSupport.toString());
+	webSocket.setData("workshop", customMapSupport.getCustomMap());
+	webSocket.setData("map", customMapSupport.getMap());
 
 	mmrNotifierToken = gameWrapper->GetMMRWrapper().RegisterMMRNotifier([this](UniqueIDWrapper id) {
 		// Workaround since Epic version doesn't appear to get MMR notifications for local user
-		if (updateRankOnNextNotification) {
+		if (gameWrapper->IsUsingEpicVersion() && updateRankOnNextNotification) {
 			updateRankOnNextNotification = false;
-			ranks.getRanks(gameWrapper);
-			webSocket.setData("rank", ranks.toString("json", cvarManager));
+			gameWrapper->SetTimeout([this](GameWrapper* gw) {
+				ranks.getRanks(gameWrapper);
+				webSocket.setData("rank", ranks.toString("json", cvarManager));
+				}, 3.0f);
 		}
 
-		/*if (id.GetIdString().compare(gameWrapper->GetUniqueID().GetIdString()) == 0) {
+		if (gameWrapper->IsUsingSteamVersion() && id.GetIdString().compare(gameWrapper->GetUniqueID().GetIdString()) == 0) {
 			ranks.updateRank(gameWrapper);
 			webSocket.setData("rank", ranks.toString("json", cvarManager));
-		}*/
+			updateRankOnNextNotification = false;
+		}
 		});
 	
 	gameWrapper->SetTimeout([this](GameWrapper* gw) { // Doesn't appear to update when ranks are initially retrieved
@@ -138,11 +144,16 @@ void StreamAPIPlugin::onLoad()
 	gameWrapper->HookEventWithCaller<ServerWrapper>(MAP_LOADED_EVENT, [this](ServerWrapper sw, void* params, string eventName) {
 		cvarManager->log(eventName);
 		auto mapName = wstring(*reinterpret_cast<wchar_t**>(params));
-		auto oldMapStr = customMapSupport.toString();
+		auto oldMapStr = customMapSupport.getMap();
+		auto oldCustomMapStr = customMapSupport.getCustomMap();
 		customMapSupport.updateMap(mapName);
-		auto newMapStr = customMapSupport.toString();
+		auto newMapStr = customMapSupport.getMap();
 		if (oldMapStr.compare(newMapStr) != 0) {
-			webSocket.setData("workshop", newMapStr);
+			webSocket.setData("map", newMapStr);
+		}
+		auto newCustomMapStr = customMapSupport.getCustomMap();
+		if (oldCustomMapStr.compare(newCustomMapStr) != 0) {
+			webSocket.setData("workshop", newCustomMapStr);
 		}
 		});
 	gameWrapper->HookEventPost(RANKS_UPDATE_EVENT, [this](string eventName) { updateRankOnNextNotification = true; });
@@ -155,6 +166,7 @@ void StreamAPIPlugin::onLoad()
 	commandNameToCommand["training"] = std::bind(&StreamAPIPlugin::trainingCommand, this, std::placeholders::_1);
 	commandNameToCommand["rank"] = std::bind(&StreamAPIPlugin::rankCommand, this, std::placeholders::_1);
 	commandNameToCommand["workshop"] = std::bind(&StreamAPIPlugin::workshopCommand, this, std::placeholders::_1);
+	commandNameToCommand["map"] = std::bind(&StreamAPIPlugin::mapCommand, this, std::placeholders::_1);
 }
 
 void StreamAPIPlugin::onUnload()
@@ -196,7 +208,6 @@ void StreamAPIPlugin::getLoadout()
 	this->loadout.load(teamNum, cvarManager, gameWrapper);
 	if (loadoutStr.compare(this->loadout.toString()) != 0) {
 		auto ls = this->loadout.getItemString("json", ",", true, true);
-		cvarManager->log(ls);
 		webSocket.setData("loadout", ls);
 	}
 }
@@ -560,7 +571,7 @@ void StreamAPIPlugin::getBindings()
 		kbmBindingsStr = generateBindingsStr(gameWrapper->GetSettings().GetAllPCBindings(), nullptr, defaultPCBindings, outputSeparator, ": ");
 	}
 
-	if (ds4BindingsStr.compare(oldGamepadStr) != 0 || kbmBindingsStr.compare(oldKbmStr) == 0) {
+	if (ds4BindingsStr.compare(oldGamepadStr) != 0 || kbmBindingsStr.compare(oldKbmStr) != 0) {
 		webSocket.setData("bindings",
 			"{\"ds4\":\"" + ds4BindingsStr + "\",\"xbox\":\"" + xboxBindingsStr + "\",\"kbm\":\"" + kbmBindingsStr + "\"}");
 	}
@@ -619,13 +630,19 @@ void StreamAPIPlugin::getTrainingPack()
 
 void StreamAPIPlugin::onDump(vector<string> params)
 {
-	getLoadout();
-	getSens();
-	getCamera();
-	getBindings();
-	getVideo();
-	ranks.getRanks(gameWrapper);
-	webSocket.setData("rank", ranks.toString("json", cvarManager));
+	if (params.size() > 1 && params[1].compare("stale") == 0) {
+		cvarManager->log("Dumping stale data");
+	}
+	else {
+		cvarManager->log("Refreshing data before dumping");
+		getLoadout();
+		getSens();
+		getCamera();
+		getBindings();
+		getVideo();
+		ranks.getRanks(gameWrapper);
+		webSocket.setData("rank", ranks.toString("json", cvarManager));
+	}
 
 	cvarManager->log(this->loadout.toString());
 	cvarManager->log("Sens: \n\t" + sensStr);
@@ -635,7 +652,8 @@ void StreamAPIPlugin::onDump(vector<string> params)
 	cvarManager->log("DS4 bindings: \n\t" + ds4BindingsStr);
 	cvarManager->log("Video: \n\t" + videoStr);
 	cvarManager->log("Ranks: \n\t" + ranks.toString("", cvarManager));
-	cvarManager->log("Map: " + customMapSupport.toString());
+	cvarManager->log("CustomMap: " + customMapSupport.getCustomMap());
+	cvarManager->log("Map: " + customMapSupport.getMap());
 }
 
 void StreamAPIPlugin::startHttpServer(int port)
@@ -745,5 +763,95 @@ std::string StreamAPIPlugin::rankCommand(std::string args)
 
 std::string StreamAPIPlugin::workshopCommand(std::string args)
 {
-	return customMapSupport.toString();
+	return customMapSupport.getCustomMap();
+}
+
+std::string StreamAPIPlugin::mapCommand(std::string args)
+{
+	return customMapSupport.getMap();
+}
+
+void StreamAPIPlugin::SubmitReport()
+{
+	gameWrapper->Execute(
+		[this](GameWrapper* gw) {
+			// Dump data to log before sending log (might not be included in report if exceeds MAX_REPORT_SIZE)
+			cvarManager->log("Dumping data to log before submitting report");
+			onDump(vector<string>{"streamapi_dump", "stale"});
+			onDump(vector<string>{"streamapi_dump"});
+			boost::thread t{ &StreamAPIPlugin::SubmitReportThread, this }; // TODO: join this thread
+		});
+}
+
+void StreamAPIPlugin::SubmitReportThread() {
+	guiReportStatus = "";
+
+	cvarManager->log("Reading bakkesmod.log");
+	char* buf = (char*)malloc(MAX_REPORT_SIZE);
+	if (!buf) {
+		guiReportStatus = "Failed to allocate buffer for report. Aborting report submission.";
+		cvarManager->log(guiReportStatus);
+		return;
+	}
+
+	size_t bufWritten = 0;
+	size_t written;
+	int errno;
+
+	// Write token to buf
+	written = snprintf(&buf[bufWritten], MAX_REPORT_SIZE - bufWritten, "Token: %s\n\n", webSocket.getToken().c_str()); // TODO: Do we need to worry about encoding?
+	bufWritten += min(written, MAX_REPORT_SIZE - 1 - bufWritten);
+
+	// Write report to buf
+	if (guiReportDetails[0] != 0) {
+		written = snprintf(&buf[bufWritten], MAX_REPORT_SIZE - bufWritten, "Report:\n%s\n\n", guiReportDetails);
+		bufWritten += min(written, MAX_REPORT_SIZE - 1 - bufWritten);
+	}
+
+	// Read bakkesmod.log into buf
+	ifstream fin(gameWrapper->GetBakkesModPath() / "bakkesmod.log");
+	if (fin.fail()) {
+		if (guiReportDetails[0] != 0) {
+			guiReportStatus = "Failed to read bakkesmod.log for submission. Submitting report details without bakkesmod.log data.";
+		}
+		else {
+			guiReportStatus = "Failed to read bakkesmod.log for submission.";
+		}
+		cvarManager->log(guiReportStatus);
+	}
+	else {
+		fin.read(&buf[bufWritten], MAX_REPORT_SIZE - 1 - bufWritten);
+		size_t n = fin.gcount();
+		bufWritten += n;
+		cvarManager->log("Read " + to_string(n) + " bytes from bakkesmod.log into buffer of size " + to_string(MAX_REPORT_SIZE));
+		buf[bufWritten] = 0;
+	}
+
+	cvarManager->log("Submitting report");
+	httplib::MultipartFormDataItems items = {
+		{ "report", buf, "report.txt", "text/plain" }
+	};
+
+	httplib::Client cli(REPORT_SERVER_URL);
+	try {
+		auto res = cli.Post("/api/rocket-league/stream-api/submit-report", items);
+		if (res) {
+			if (res->status == 200) {
+				guiReportStatus = "Report submitted successfully";
+			}
+			else {
+				guiReportStatus = "Failed to submit report to server: " + res->body;
+			}
+			cvarManager->log("Report submission returned status: " + to_string(res->status) + ". " + guiReportStatus);
+		}
+		else {
+			guiReportStatus = "Could not reach report server";
+			cvarManager->log(guiReportStatus);
+		}
+	}
+	catch (exception e) {
+		cvarManager->log("Failed to connect to server: " + string(e.what()));
+	}
+
+	free(buf);
 }

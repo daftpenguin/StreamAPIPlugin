@@ -1,3 +1,13 @@
+#pragma comment(lib, "libssl.lib")
+#pragma comment(lib, "libcrypto.lib")
+#pragma comment(lib, "CRYPT32.lib")
+#pragma comment(lib, "Ws2_32.lib")
+#pragma comment(lib, "pluginsdk.lib")
+
+#define CPPHTTPLIB_OPENSSL_SUPPORT
+#define WIN32_LEAN_AND_MEAN
+#include "cpp-httplib/httplib.h"
+
 #include "StreamAPIPlugin.h"
 
 #include <windows.h>
@@ -80,6 +90,20 @@ void StreamAPIPlugin::RenderSettings()
 			wstring url = L"https://www.daftpenguin.com/api/rocket-league/stream-api/data/" + platform + L"/" + username + L"?cmd=loadout";
 			ShellExecute(0, 0, url.c_str(), 0, 0, SW_SHOW);
 		}
+	}
+
+	ImGui::Separator();
+
+	ImGui::TextWrapped("Report an issue:");
+	ImGui::TextWrapped("Sometimes weird things happen and features don't work the way they're supposed to. Your bakkesmod.log file can help.");
+	ImGui::TextWrapped("By clicking submit, both your bakkesmod.log file and any details you give below (optional) will be sent to my server so that I can debug the issue.");
+	ImGui::InputTextMultiline("Details", guiReportDetails, sizeof(guiReportDetails));
+	if (ImGui::Button("Submit")) {
+		SubmitReport();
+	}
+	if (!guiReportStatus.empty()) {
+		ImGui::SameLine();
+		ImGui::TextWrapped(guiReportStatus.c_str());
 	}
 
 	ImGui::Separator();
