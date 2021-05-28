@@ -427,6 +427,7 @@ void Loadout::fromPlugins(int teamNum, std::shared_ptr<CVarManagerWrapper> cv, s
 {
 	bool rainbowPluginLoaded = false;
 	bool alphaConsoleLoaded = false;
+	bool attachmentRescalerLoaded = false;
 
 	auto loadedPlugins = gw->GetPluginManager().GetLoadedPlugins();
 	for (auto it = loadedPlugins->begin(); it != loadedPlugins->end(); ++it) {
@@ -437,6 +438,10 @@ void Loadout::fromPlugins(int teamNum, std::shared_ptr<CVarManagerWrapper> cv, s
 		else if (pName.compare("Rainbow car") == 0) {
 			rainbowPluginLoaded = true;
 		}
+		else if (pName.compare("ItsBranK's Attachment Rescaler") == 0) {
+			attachmentRescalerLoaded = true;
+		}
+		_globalCvarManager->log("Plugin name: " + pName);
 	}
 
 	if (rainbowPluginLoaded) {
@@ -450,6 +455,11 @@ void Loadout::fromPlugins(int teamNum, std::shared_ptr<CVarManagerWrapper> cv, s
 		this->wheels.fromAlphaConsolePlugin(cv, teamNum, "wheel");
 		this->decal.fromAlphaConsolePlugin(cv, teamNum, "decal");
 		this->topper.fromAlphaConsolePlugin(cv, teamNum, "topper");
+	}
+
+	if (attachmentRescalerLoaded) {
+		this->antenna.addRescalerPlugin(cv, teamNum, "antenna");
+		this->topper.addRescalerPlugin(cv, teamNum, "topper");
 	}
 }
 
@@ -754,6 +764,23 @@ void LoadoutItem::fromAlphaConsolePlugin(std::shared_ptr<CVarManagerWrapper> cva
 		this->itemString = "AlphaConsole: " + texture;
 		if (reactive) {
 			this->itemString += " (Reactive: " + reactiveMultiplier + "x)";
+		}
+	}
+}
+
+void LoadoutItem::addRescalerPlugin(std::shared_ptr<CVarManagerWrapper> cvarManager, int teamNum, std::string itemType)
+{
+	CVarWrapper enabled = cvarManager->getCvar("rescaler_enabled");
+	CVarWrapper topperScale = cvarManager->getCvar("rescaler_topper_scale");
+	CVarWrapper antennaScale = cvarManager->getCvar("rescaler_antenna_scale");
+
+	if (enabled.IsNull()) return;
+	if (enabled.getBoolValue()) {
+		if (itemType.compare("topper") == 0) {
+			this->itemString += " (Rescaled: " + topperScale.getStringValue() + ")";
+		}
+		else if (itemType.compare("antenna") == 0) {
+			this->itemString += " (Rescaled: " + antennaScale.getStringValue() + ")";
 		}
 	}
 }

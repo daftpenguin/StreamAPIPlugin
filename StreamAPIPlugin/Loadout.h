@@ -57,6 +57,7 @@ struct LoadoutItem {
 	void fromItem(unsigned long long id, bool isOnline, std::shared_ptr<GameWrapper> gw);
 	void fromBMItem(BM::Item item, std::shared_ptr<GameWrapper> gw);
 	void fromAlphaConsolePlugin(std::shared_ptr<CVarManagerWrapper> cvarManager, int teamNum, std::string itemType);
+	void addRescalerPlugin(std::shared_ptr<CVarManagerWrapper> cvarManager, int teamNum, std::string itemType);
 	void addTeamId(uint8_t teamId, std::shared_ptr<GameWrapper> gw);
 	std::string toString();
 	void handleAttributes(ArrayWrapper<ProductAttributeWrapper> attrs, std::shared_ptr<GameWrapper> gw);
