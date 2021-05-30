@@ -519,12 +519,12 @@ fs::path getSteamRLInstallPath()
 {
 	wstring steamPathStr;
 	winreg::RegKey key{ HKEY_CURRENT_USER, L"SOFTWARE\\Valve\\Steam" };
-	steamPathStr = key.TryGetStringValue(L"SteamPath").value_or("");
+	steamPathStr = key.TryGetStringValue(L"SteamPath").value_or(L"");
 
 	if (steamPathStr.empty()) {
 		_globalCvarManager->log("CustomMapSupport: SOFTWARE\\Valve\\Steam\\SteamPath doesn't exist, trying SOFTWARE\\WOW6432Node\\Valve\\Steam");
 		winreg::RegKey key{ HKEY_LOCAL_MACHINE, L"SOFTWARE\\WOW6432Node\\Valve\\Steam" };
-		steamPathStr = key.TryGetStringValue(L"SteamPath").value_or("");
+		steamPathStr = key.TryGetStringValue(L"SteamPath").value_or(L"");
 	}
 
 	if (steamPathStr.empty()) {
@@ -584,7 +584,7 @@ fs::path getEpicRLInstallPath()
 {
 	wstring epicManifestsDir;
 	winreg::RegKey key{ HKEY_CURRENT_USER, L"SOFTWARE\\Epic Games\\EOS" };
-	epicManifestsDir = key.TryGetStringValue(L"ModSdkMetadataDir").value_or("");
+	epicManifestsDir = key.TryGetStringValue(L"ModSdkMetadataDir").value_or(L"");
 
 	if (epicManifestsDir.empty()) {
 		_globalCvarManager->log("CustomMapSupport: Failed to find epic installation from registry. Trying default installation path.");

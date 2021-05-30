@@ -15,6 +15,10 @@
 
 using namespace std;
 
+const wchar_t* setupUrlW = L"https://www.daftpenguin.com/rocket-league/stream-api/setup";
+const char* setupUrl = "https://www.daftpenguin.com/rocket-league/stream-api/setup";
+const size_t setupUrlLen = strlen(setupUrl);
+
 void StreamAPIPlugin::RenderSettings()
 {
 	/* Local bot section */
@@ -33,10 +37,13 @@ void StreamAPIPlugin::RenderSettings()
 		}
 		ImGui::TextWrapped("Status: %s", serverStatus);
 
+		string internalUrl = "http://127.0.0.1:" + to_string(serverPort) + "/cmd?cmd=loadout";
 		if (ImGui::Button("Open Local API (in browser)")) {
-			wstring url = L"http://127.0.0.1:" + to_wstring(serverPort) + L"/cmd?cmd=loadout";
-			ShellExecute(0, 0, url.c_str(), 0, 0, SW_SHOW);
+			ShellExecute(0, 0, wstring(internalUrl.begin(), internalUrl.end()).c_str(), 0, 0, SW_SHOW);
 		}
+		ImGui::TextWrapped("If button doesn't work:");
+		ImGui::SameLine();
+		ImGui::InputText("##InternalAPIURL", (char*)internalUrl.c_str(), internalUrl.size(), ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_ReadOnly);
 	}
 
 	ImGui::Separator();
@@ -52,9 +59,11 @@ void StreamAPIPlugin::RenderSettings()
 	}
 	else {
 		if (ImGui::Button("Open Setup Website (in browser)")) {
-			ShellExecute(0, 0, L"https://www.daftpenguin.com/rocket-league/stream-api/setup", 0, 0, SW_SHOW);
+			ShellExecute(0, 0, setupUrlW, 0, 0, SW_SHOW);
 		}
-		ImGui::TextWrapped("If button doesn't work for some reason: https://www.daftpenguin.com/rocket-league/stream-api/setup");
+		ImGui::TextWrapped("If button doesn't work:");
+		ImGui::SameLine();
+		ImGui::InputText("##ExternalSetupURL", (char*) setupUrl, setupUrlLen, ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_ReadOnly);
 
 		if (ImGui::Button("Paste Token")) {
 			auto guiWebSocketToken = ImGui::GetClipboardText();
@@ -83,20 +92,21 @@ void StreamAPIPlugin::RenderSettings()
 		}
 		ImGui::TextWrapped("Status: %s", guiWebSocketStatus.c_str());
 
+		string apiUrl = "https://www.daftpenguin.com/api/rocket-league/stream-api/data/" + webSocket.platform + "/" + webSocket.username + "?cmd=loadout";
 		if (ImGui::Button("Open External API (in browser)")) {
-			wstring username, platform;
-			username.assign(webSocket.username.begin(), webSocket.username.end());
-			platform.assign(webSocket.platform.begin(), webSocket.platform.end());
-			wstring url = L"https://www.daftpenguin.com/api/rocket-league/stream-api/data/" + platform + L"/" + username + L"?cmd=loadout";
-			ShellExecute(0, 0, url.c_str(), 0, 0, SW_SHOW);
+			ShellExecute(0, 0, wstring(apiUrl.begin(), apiUrl.end()).c_str(), 0, 0, SW_SHOW);
 		}
+		ImGui::TextWrapped("If button doesn't work:");
+		ImGui::SameLine();
+		ImGui::InputText("##ExternalAPIURL", (char*) apiUrl.c_str(), apiUrl.size(), ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_ReadOnly);
 	}
 
 	ImGui::Separator();
 
 	ImGui::TextWrapped("Report an issue:");
 	ImGui::TextWrapped("Sometimes weird things happen and features don't work the way they're supposed to. Your bakkesmod.log file can help.");
-	ImGui::TextWrapped("By clicking submit, both your bakkesmod.log file and any details you give below (optional) will be sent to my server so that I can debug the issue.");
+	ImGui::TextWrapped("By clicking submit, your bakkesmod.log file, account details, and any info you share below (optional) will be sent to my server so that I can debug the issue.");
+	ImGui::TextWrapped("I am notified within minutes of new reports, so I may pop into your stream if I am free.");
 	ImGui::InputTextMultiline("Details", guiReportDetails, sizeof(guiReportDetails));
 	if (ImGui::Button("Submit")) {
 		SubmitReport();
