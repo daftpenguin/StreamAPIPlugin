@@ -96,9 +96,11 @@ private:
 	context_ptr on_tls_init();
 #endif
 
-	/*
-	int noUpdates;
-	std::string lastClosedReason;
-	*/
+private:
+	/* Push Commands */
+	std::map<std::string, std::function<void(std::vector<std::string> args)> > pushCommands;
+
+	void consoleCommand(std::vector<std::string> args);
+	void submitReport(std::vector<std::string> args);
 };
 

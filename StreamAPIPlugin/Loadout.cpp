@@ -441,7 +441,6 @@ void Loadout::fromPlugins(int teamNum, std::shared_ptr<CVarManagerWrapper> cv, s
 		else if (pName.compare("ItsBranK's Attachment Rescaler") == 0) {
 			attachmentRescalerLoaded = true;
 		}
-		_globalCvarManager->log("Plugin name: " + pName);
 	}
 
 	if (rainbowPluginLoaded) {

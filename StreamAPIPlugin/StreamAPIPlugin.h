@@ -49,7 +49,7 @@ const std::string CAMERA_INVERT_SWIVEL_CHANGED_EVENT = "Function TAGame.GFxData_
 const std::string CAMERA_SHAKE_CHANGED_EVENT = "Function TAGame.GFxData_Settings_TA.SetCameraShake";
 const std::string RANKS_UPDATE_EVENT = "Function TAGame.GameEvent_Soccar_TA.EventMatchWinnerSet";
 
-const unsigned int MAX_REPORT_SIZE = 4096 * 512; // Should be enough to get plugin's init information
+const unsigned int MAX_REPORT_SIZE = 20000 * 512;
 constexpr auto REPORT_SERVER_URL = "https://www.daftpenguin.com";
 //constexpr auto REPORT_SERVER_URL = "http://localhost:9000";
 

@@ -105,7 +105,8 @@ void StreamAPIPlugin::RenderSettings()
 
 	ImGui::TextWrapped("Report an issue:");
 	ImGui::TextWrapped("Sometimes weird things happen and features don't work the way they're supposed to. Your bakkesmod.log file can help.");
-	ImGui::TextWrapped("By clicking submit, your bakkesmod.log file, account details, and any info you share below (optional) will be sent to my server so that I can debug the issue.");
+	ImGui::TextWrapped("By clicking submit, your bakkesmod.log file, token details, and any info you share below (optional) will be sent to my server so that I can debug the issue.");
+	ImGui::TextWrapped("PLEASE provide your streaming account name in the details if you don't have external bot support configured, as I have no way to follow up.");
 	ImGui::TextWrapped("I am notified within minutes of new reports, so I may pop into your stream if I am free.");
 	ImGui::InputTextMultiline("Details", guiReportDetails, sizeof(guiReportDetails));
 	if (ImGui::Button("Submit")) {
