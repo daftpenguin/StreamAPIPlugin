@@ -1,9 +1,12 @@
 #include "Loadout.h"
 #include "StreamAPIPlugin.h"
 #include "BMLoadoutLib/helper_classes.h"
+#include "nlohmann/json.hpp"
 
 #include <bakkesmod/wrappers/PluginManagerWrapper.h>
 #include <iomanip>
+#include <filesystem>
+#include <boost/algorithm/string.hpp>
 
 
 #define APPEND_STRING_WITH_ITEM(oss, separator, showSlotName, slotName, itemString) { \
@@ -17,6 +20,8 @@
 		loadoutSlot.fromItem(id, isOnline, gameWrapper);
 
 using namespace std;
+namespace fs = std::filesystem;
+using json = nlohmann::json;
 
 const vector<RGBColor> team0Colors = {
 	RGBColor(80, 127, 57),
@@ -408,8 +413,10 @@ void Loadout::fromBakkesMod(int teamNum, std::shared_ptr<CVarManagerWrapper> cv,
 		auto teamWheelId = (teamNum == 0 ? bmloadout.body.blue_wheel_team_id : bmloadout.body.orange_wheel_team_id);
 		if (teamWheelId > 0) this->wheels.addTeamId(teamWheelId, gw);
 
-		this->primaryPaint.fromBMPaint((teamNum == 0 ? bmloadout.body.blueColor.primary_colors : bmloadout.body.orangeColor.primary_colors));
-		this->accentPaint.fromBMPaint((teamNum == 0 ? bmloadout.body.blueColor.secondary_colors : bmloadout.body.orangeColor.secondary_colors));
+		if ((teamNum == 0 && bmloadout.body.blueColor.should_override) || (teamNum == 1 && bmloadout.body.orangeColor.should_override)) {
+			this->primaryPaint.fromBMPaint((teamNum == 0 ? bmloadout.body.blueColor.primary_colors : bmloadout.body.orangeColor.primary_colors));
+			this->accentPaint.fromBMPaint((teamNum == 0 ? bmloadout.body.blueColor.secondary_colors : bmloadout.body.orangeColor.secondary_colors));
+		}
 
 		boostSet = items[BM::SLOT_BOOST].product_id != 0;
 	}
@@ -449,11 +456,17 @@ void Loadout::fromPlugins(int teamNum, std::shared_ptr<CVarManagerWrapper> cv, s
 	}
 
 	if (alphaConsoleLoaded) {
-		this->antenna.fromAlphaConsolePlugin(cv, teamNum, "antenna");
-		this->boost.fromAlphaConsolePlugin(cv, teamNum, "boost");
-		this->wheels.fromAlphaConsolePlugin(cv, teamNum, "wheel");
-		this->decal.fromAlphaConsolePlugin(cv, teamNum, "decal");
-		this->topper.fromAlphaConsolePlugin(cv, teamNum, "topper");
+		if (!alphaConsoleTextures.synched && !alphaConsoleTextures.synchFailed) {
+			alphaConsoleTextures.resync(cv, gw);
+		}
+
+		if (alphaConsoleTextures.synched) {
+			this->antenna.fromAlphaConsolePlugin(cv, teamNum, BM::SLOT_ANTENNA, alphaConsoleTextures, this->body);
+			this->boost.fromAlphaConsolePlugin(cv, teamNum, BM::SLOT_BOOST, alphaConsoleTextures, this->body);
+			this->wheels.fromAlphaConsolePlugin(cv, teamNum, BM::SLOT_WHEELS, alphaConsoleTextures, this->body);
+			this->decal.fromAlphaConsolePlugin(cv, teamNum, BM::SLOT_SKIN, alphaConsoleTextures, this->body);
+			this->topper.fromAlphaConsolePlugin(cv, teamNum, BM::SLOT_HAT, alphaConsoleTextures, this->body);
+		}
 	}
 
 	if (attachmentRescalerLoaded) {
@@ -692,6 +705,7 @@ void LoadoutItem::fromBMItem(BM::Item item, std::shared_ptr<GameWrapper> gw)
 		return;
 	}
 
+	this->productId = item.product_id;
 	this->instanceId = item.product_id;
 	this->paintId = item.paint_index;
 	this->type = ItemType::BAKKESMOD;
@@ -728,15 +742,22 @@ void LoadoutItem::fromBMItem(BM::Item item, std::shared_ptr<GameWrapper> gw)
 	}
 }
 
-void LoadoutItem::fromAlphaConsolePlugin(std::shared_ptr<CVarManagerWrapper> cvarManager, int teamNum, std::string itemType)
+std::unordered_map<BM::EQUIPSLOT, std::string> BM_SLOT_TO_AC_NAME({
+	{ BM::SLOT_SKIN, "decal" },
+	{ BM::SLOT_WHEELS, "wheel" },
+	{ BM::SLOT_ANTENNA, "antenna" },
+	{ BM::SLOT_HAT, "topper" },
+	});
+void LoadoutItem::fromAlphaConsolePlugin(std::shared_ptr<CVarManagerWrapper> cvarManager, int teamNum, BM::EQUIPSLOT slot, AlphaConsoleTextures& textures, LoadoutItem& body)
 {
 	string teamStr = teamNum == 0 ? "blue" : "orange";
 
-	if (itemType.compare("wheel") == 0 || itemType.compare("antenna") == 0 || itemType.compare("decal") || itemType.compare("topper")) {
+	if (slot == BM::SLOT_WHEELS || slot == BM::SLOT_ANTENNA || slot == BM::SLOT_SKIN || slot == BM::SLOT_HAT) {
 		// Get the cvar values
+		string itemType = BM_SLOT_TO_AC_NAME[slot];
 		CVarWrapper cvarTexture = cvarManager->getCvar("acplugin_" + itemType + "texture_selectedtexture_" + teamStr);
 		if (cvarTexture.IsNull()) return;
-		auto texture = cvarTexture.getStringValue();
+		auto textureName = cvarTexture.getStringValue();
 
 		// Get reactive cvars if wheel
 		bool reactive = false;
@@ -752,23 +773,38 @@ void LoadoutItem::fromAlphaConsolePlugin(std::shared_ptr<CVarManagerWrapper> cva
 			}
 		}
 
-		if (texture.compare("Default") == 0) {
+		if (textureName.compare("Default") == 0) {
 			if (reactive) {
 				this->itemString += " (AlphaConsole reactive: " + reactiveMultiplier + "x)";
 			}
 			return;
 		}
 
-		this->type = ItemType::ALPHA_CONSOLE;
-		this->itemString = "AlphaConsole: " + texture;
-		if (reactive) {
-			this->itemString += " (Reactive: " + reactiveMultiplier + "x)";
+		auto textureOpt = textures.matchTexture(slot, textureName);
+		if (textureOpt.has_value()) {
+			auto texture = textureOpt.value();
+			if (this->productId != texture.productId)
+				return;
+			if (slot == BM::SLOT_SKIN) {
+				if (body.productId != texture.bodyId)
+					return;
+			}
+
+			this->type = ItemType::ALPHA_CONSOLE;
+			this->itemString = "AlphaConsole: " + textureName;
+			if (reactive) {
+				this->itemString += " (Reactive: " + reactiveMultiplier + "x)";
+			}
 		}
 	}
+
+	// TODO: Handle boost
 }
 
 void LoadoutItem::addRescalerPlugin(std::shared_ptr<CVarManagerWrapper> cvarManager, int teamNum, std::string itemType)
 {
+	if (this->productId == 0) return;
+
 	CVarWrapper enabled = cvarManager->getCvar("rescaler_enabled");
 	CVarWrapper topperScale = cvarManager->getCvar("rescaler_topper_scale");
 	CVarWrapper antennaScale = cvarManager->getCvar("rescaler_antenna_scale");
@@ -776,9 +812,11 @@ void LoadoutItem::addRescalerPlugin(std::shared_ptr<CVarManagerWrapper> cvarMana
 	if (enabled.IsNull()) return;
 	if (enabled.getBoolValue()) {
 		if (itemType.compare("topper") == 0) {
+			if (topperScale.getIntValue() == 1) return;
 			this->itemString += " (Rescaled: " + topperScale.getStringValue() + ")";
 		}
 		else if (itemType.compare("antenna") == 0) {
+			if (antennaScale.getIntValue() == 1) return;
 			this->itemString += " (Rescaled: " + antennaScale.getStringValue() + ")";
 		}
 	}
@@ -978,4 +1016,95 @@ void Loadout::clear()
 
 	this->primaryPaint.clear();
 	this->accentPaint.clear();
+}
+
+bool AlphaConsoleTextures::resync(std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw)
+{
+	auto acpath = gw->GetDataFolder() / "acplugin";
+	if (!fs::exists(acpath)) {
+		cv->log("AlphaConsole data folder doesn't exist");
+		synchFailed = true;
+		return false;
+	}
+
+	loadTexturesForSlot(cv, BM::SLOT_SKIN, acpath / "DecalTextures");
+	loadTexturesForSlot(cv, BM::SLOT_ANTENNA, acpath / "AntennaTextures");
+	loadTexturesForSlot(cv, BM::SLOT_HAT, acpath / "TopperTextures");
+	loadTexturesForSlot(cv, BM::SLOT_WHEELS, acpath / "WheelTextures");
+	synched = true;
+	return true;
+}
+
+void AlphaConsoleTextures::loadTexturesForSlot(std::shared_ptr<CVarManagerWrapper> cv, BM::EQUIPSLOT slot, std::filesystem::path dir)
+{
+	this->textures[slot].clear();
+
+	if (!fs::exists(dir)) {
+		cv->log(L"Directory " + dir.wstring() + L" doesn't exist");
+		return;
+	}
+
+	for (auto& p : fs::recursive_directory_iterator(dir)) {
+		if (!p.is_directory()) {
+			auto fpath = p.path();
+			if (fpath.has_extension() && boost::to_lower_copy(fpath.extension().string()).compare(".json") == 0) {
+				ifstream fin(fpath);
+				if (fin.fail()) {
+					cv->log(L"Failed to open alpha console file: " + fpath.wstring());
+					continue;
+				}
+				stringstream ss;
+				ss << fin.rdbuf();
+
+				json j;
+				try {
+					j = json::parse(ss.str());
+				}
+				catch (...) {
+					cv->log(L"Exception thrown trying to parse json file: " + fpath.wstring());
+					continue;
+				}
+
+				string mainDecalDir = fs::relative(fpath.parent_path(), dir).string();
+				string itemPrefix = mainDecalDir.compare(".") == 0 ? "" : mainDecalDir + " - ";
+				for (auto& item : j.items()) {
+					auto itemName = itemPrefix + item.key();
+					auto value = item.value();
+					if (slot == BM::SLOT_SKIN) {
+						if (value.find("BodyID") == value.end() || value.find("SkinID") == value.end()) {
+							cv->log(L"Decal missing BodyID or SkinID in: " + fpath.wstring());
+							continue;
+						}
+						try {
+							int bodyID = value.at("BodyID").get<int>();
+							int skinID = value.at("SkinID").get<int>();
+							this->textures[slot].emplace(itemName, AlphaConsoleTexture{ skinID, bodyID });
+						}
+						catch (...) {
+							cv->log(L"Exception thrown trying to parse int from BodyID or SkinID for decal " + wstring(itemName.begin(), itemName.end()) + L" in: " + fpath.wstring());
+						}
+					}
+					else {
+						if (value.find("ItemID") == value.end()) {
+							cv->log(L"Item missing BodyID or SkinID in: " + fpath.wstring());
+							continue;
+						}
+						try {
+							int itemID = value.at("ItemID").get<int>();
+							this->textures[slot].emplace(itemName, AlphaConsoleTexture{ itemID, 0 });
+						}
+						catch (...) {
+							cv->log(L"Exception thrown trying to parse int from ItemID for item " + wstring(itemName.begin(), itemName.end()) + L" in: " + fpath.wstring());
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+std::optional<AlphaConsoleTexture> AlphaConsoleTextures::matchTexture(BM::EQUIPSLOT slot, std::string itemName)
+{
+	auto it = textures[slot].find(itemName);
+	return it != textures[slot].end() ? std::optional<std::reference_wrapper<AlphaConsoleTexture> >{it->second} : std::nullopt;
 }

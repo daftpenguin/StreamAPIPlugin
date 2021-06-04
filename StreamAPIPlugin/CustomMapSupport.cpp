@@ -594,49 +594,44 @@ fs::path getEpicRLInstallPath()
 		epicManifestsDir = DEFAULT_EPIC_INSTALLATION_PATH;
 	}
 
-	if (epicManifestsDir.empty() || !fs::exists(epicManifestsDir)) {
+	if (!fs::exists(epicManifestsDir)) {
 		_globalCvarManager->log("CustomMapSupport: Failed to find epic manifests directory. Map replacement identification will be unsupported.");
 		return fs::path();
 	}
 
-	try {
-		for (auto& p : fs::directory_iterator(epicManifestsDir)) {
-			if (p.is_directory()) continue;
+	for (auto& p : fs::directory_iterator(epicManifestsDir)) {
+		if (p.is_directory()) continue;
 
-			auto manifest = p.path();
-			ifstream fin(manifest);
-			if (fin.fail()) {
-				_globalCvarManager->log("CustomMapSupport: Failed to load epic manifest file: " + manifest.string());
+		auto manifest = p.path();
+		ifstream fin(manifest);
+		if (fin.fail()) {
+			_globalCvarManager->log("CustomMapSupport: Failed to load epic manifest file: " + manifest.string());
+			continue;
+		}
+
+		stringstream ss;
+		ss << fin.rdbuf();
+
+		try {
+			json j = json::parse(ss.str());
+			if (j.find("MandatoryAppFolderName") == j.end() || j.find("InstallLocation") == j.end()) {
+				_globalCvarManager->log("CustomMapSupport: Failed to find InstallLocation or MandatoryAppFolderName in manifest file: " + manifest.string());
 				continue;
 			}
-
-			stringstream ss;
-			ss << fin.rdbuf();
-
-			try {
-				json j = json::parse(ss.str());
-				if (j.find("MandatoryAppFolderName") == j.end() || j.find("InstallLocation") == j.end()) {
-					_globalCvarManager->log("CustomMapSupport: Failed to find InstallLocation or MandatoryAppFolderName in manifest file: " + manifest.string());
-					continue;
-				}
-				auto mandatoryAppFolderName = fs::path(j["MandatoryAppFolderName"].get<string>());
-				if (mandatoryAppFolderName.compare("rocketleague") != 0) {
-					continue;
-				}
-				auto installLocation = fs::path(j["InstallLocation"].get<string>());
-				if (!fs::exists(installLocation)) {
-					_globalCvarManager->log("CustomMapSupport: InstallLocation (" + installLocation.string() + ") retrieved from manifest file (" + manifest.string() + ") does not exist");
-					continue;
-				}
-				return installLocation;
+			auto mandatoryAppFolderName = fs::path(j["MandatoryAppFolderName"].get<string>());
+			if (mandatoryAppFolderName.compare("rocketleague") != 0) {
+				continue;
 			}
-			catch (...) {
-				_globalCvarManager->log("CustomMapSupport: Failed to parse manifest file: " + manifest.string());
+			auto installLocation = fs::path(j["InstallLocation"].get<string>());
+			if (!fs::exists(installLocation)) {
+				_globalCvarManager->log("CustomMapSupport: InstallLocation (" + installLocation.string() + ") retrieved from manifest file (" + manifest.string() + ") does not exist");
+				continue;
 			}
+			return installLocation;
 		}
-	}
-	catch (...) {
-		_globalCvarManager->log("CustomMapSupport: Exception caught when attempting to load Epic manifest directory.");
+		catch (...) {
+			_globalCvarManager->log("CustomMapSupport: Failed to parse manifest file: " + manifest.string());
+		}
 	}
 
 	return fs::path();

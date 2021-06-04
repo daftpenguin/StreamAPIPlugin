@@ -9,6 +9,7 @@
 #include <sstream>
 #include <unordered_set>
 #include <vector>
+#include <optional>
 
 enum class ItemType {
 	NONE,
@@ -45,6 +46,26 @@ struct RGBColor {
 	}
 };
 
+struct AlphaConsoleTexture {
+	int productId;
+	int bodyId; // If decal
+};
+
+class AlphaConsoleTextures {
+public:
+	AlphaConsoleTextures() {};
+	bool resync(std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw);
+	std::optional<AlphaConsoleTexture> matchTexture(BM::EQUIPSLOT slot, std::string itemName);
+
+	bool synched = false;
+	bool synchFailed = false;
+
+private:
+	void loadTexturesForSlot(std::shared_ptr<CVarManagerWrapper> cv, BM::EQUIPSLOT slot, std::filesystem::path dir);
+
+	std::unordered_map< BM::EQUIPSLOT, std::unordered_map< std::string, AlphaConsoleTexture > > textures;
+};
+
 struct LoadoutItem {
 	ItemType type = ItemType::NONE;
 	int productId;
@@ -56,7 +77,7 @@ struct LoadoutItem {
 	void clear();
 	void fromItem(unsigned long long id, bool isOnline, std::shared_ptr<GameWrapper> gw);
 	void fromBMItem(BM::Item item, std::shared_ptr<GameWrapper> gw);
-	void fromAlphaConsolePlugin(std::shared_ptr<CVarManagerWrapper> cvarManager, int teamNum, std::string itemType);
+	void fromAlphaConsolePlugin(std::shared_ptr<CVarManagerWrapper> cvarManager, int teamNum, BM::EQUIPSLOT slot, AlphaConsoleTextures& textures, LoadoutItem& body); // TODO: Clean this up
 	void addRescalerPlugin(std::shared_ptr<CVarManagerWrapper> cvarManager, int teamNum, std::string itemType);
 	void addTeamId(uint8_t teamId, std::shared_ptr<GameWrapper> gw);
 	std::string toString();
@@ -93,6 +114,7 @@ public:
 	void fromLoadoutWrapper(int teamNum, std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw);
 	void fromBakkesMod(int teamNum, std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw);
 	void fromPlugins(int teamNum, std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw);
+
 	void cleanUpStandardItems();
 
 	std::string toBMCode();
@@ -113,4 +135,6 @@ private:
 	LoadoutItem engineAudio;
 	LoadoutItem trail;
 	LoadoutItem goalExplosion;
+
+	AlphaConsoleTextures alphaConsoleTextures;
 };

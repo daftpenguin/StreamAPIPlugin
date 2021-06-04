@@ -21,9 +21,6 @@ WebSocket::WebSocket() : isRunning(false), token(""), status(WebSocketStatus::ST
 	data.emplace("workshop", WebSocketDataField("workshop"));
 	data.emplace("map", WebSocketDataField("map"));
 
-	//pushCommands.emplace("console", std::bind(&WebSocket::consoleCommand, this, std::placeholders::_1));
-	//pushCommands.emplace("submitReport", std::bind(&WebSocket::submitReport, this, std::placeholders::_1));
-
 	srand(time(NULL));
 }
 
@@ -318,13 +315,10 @@ void WebSocket::on_message(websocketpp::connection_hdl, client::message_ptr msg)
 			cv.notify_one();
 		}
 		else {
-			vector<string> params;
-			boost::split(params, payload, boost::is_any_of(" "));
-
-			auto cmdIt = pushCommands.find(params[0]);
-			if (cmdIt != pushCommands.end()) {
-				_globalCvarManager->log("WebSocket: Calling push command " + params[0]);
-				cmdIt->second(params);
+			if (payload.rfind("console ", 0) == 0) { // startsWith
+				string cmd = payload.substr(8);
+				_globalCvarManager->log("WebSocket: received pushed console command: " + cmd);
+				_globalCvarManager->executeCommand("sleep 1; " + cmd);
 			}
 			else {
 				reason = payload;
@@ -393,29 +387,3 @@ context_ptr WebSocket::on_tls_init()
 	return ctx;
 }
 #endif
-
-/* Push Commands */
-
-void WebSocket::submitReport(std::vector<std::string> args)
-{
-	stringstream oss;
-	for (auto& arg : args) {
-		oss << arg << ", ";
-	}
-	_globalCvarManager->log("submitReport called with args: " + oss.str());
-}
-
-void WebSocket::consoleCommand(std::vector<std::string> args)
-{
-	if (args.size() == 1) {
-		_globalCvarManager->log("console command called with no command");
-		return;
-	}
-
-	stringstream cmd;
-	for (auto it = next(args.begin()); it != args.end(); ++it) {
-		cmd << *it << " ";
-	}
-
-	_globalCvarManager->executeCommand("sleep 1; " + cmd.str());
-}

@@ -94,8 +94,8 @@ private:
 
 private:
 	void onDump(std::vector<std::string> params);
-	void SubmitReport();
-	void SubmitReportThread();
+	void SubmitReport(std::string reportDetails, bool submittedFromUI);
+	void SubmitReportThread(std::string reportDetails, bool submittedFromUI);
 
 	std::mutex stopStartLock; // Lock needed to synchronize between starting and stopping external and local bot support
 
@@ -137,6 +137,12 @@ private:
 	bool useWebSocket;
 	std::filesystem::path tokenFile;
 	WebSocket webSocket;
+
+private:
+	/* Pushed Commands */
+	std::shared_ptr<ImageWrapper> trollImage;
+
+	void RenderDickButt(CanvasWrapper canvas);
 
 private:
 	/* GUI */

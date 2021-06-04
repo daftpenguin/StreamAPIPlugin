@@ -110,7 +110,7 @@ void StreamAPIPlugin::RenderSettings()
 	ImGui::TextWrapped("I am notified within minutes of new reports, so I may pop into your stream if I am free.");
 	ImGui::InputTextMultiline("Details", guiReportDetails, sizeof(guiReportDetails));
 	if (ImGui::Button("Submit")) {
-		SubmitReport();
+		SubmitReport(string(guiReportDetails), true);
 	}
 	if (!guiReportStatus.empty()) {
 		ImGui::SameLine();

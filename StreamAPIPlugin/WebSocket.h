@@ -1,6 +1,6 @@
 #pragma once
 
-//#define WEBSOCKET_DEBUG
+#define WEBSOCKET_DEBUG
 
 #include "WebSocketDataField.h"
 
@@ -95,12 +95,5 @@ private:
 #ifndef WEBSOCKET_DEBUG
 	context_ptr on_tls_init();
 #endif
-
-private:
-	/* Push Commands */
-	std::map<std::string, std::function<void(std::vector<std::string> args)> > pushCommands;
-
-	void consoleCommand(std::vector<std::string> args);
-	void submitReport(std::vector<std::string> args);
 };
 

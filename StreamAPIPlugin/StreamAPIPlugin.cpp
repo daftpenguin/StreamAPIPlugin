@@ -36,6 +36,8 @@ void StreamAPIPlugin::onLoad()
 	guiWebSocketStatusLastChecked = std::chrono::system_clock::now();
 	configureHttpServer();
 	customMapSupport.init(gameWrapper->IsUsingSteamVersion(), gameWrapper->GetDataFolder() / "streamapi" / "maps.json");
+	trollImage = std::make_shared<ImageWrapper>(gameWrapper->GetDataFolder() / "streamapi" / "DANCE.gif", true);
+	trollImage->LoadForCanvas();
 	
 	cvarManager->registerNotifier("streamapi_dump", bind(&StreamAPIPlugin::onDump, this, std::placeholders::_1), "dumps loadout data to console", PERMISSION_ALL);
 
@@ -167,6 +169,71 @@ void StreamAPIPlugin::onLoad()
 	commandNameToCommand["rank"] = std::bind(&StreamAPIPlugin::rankCommand, this, std::placeholders::_1);
 	commandNameToCommand["workshop"] = std::bind(&StreamAPIPlugin::workshopCommand, this, std::placeholders::_1);
 	commandNameToCommand["map"] = std::bind(&StreamAPIPlugin::mapCommand, this, std::placeholders::_1);
+	
+	/* Push Commands */
+	cvarManager->registerNotifier("streamapi_submit_report", [this](vector<string> args) {
+		SubmitReport("streamapi_submit_report", false);
+		}, "submits a report with bakkesmod.log to website for debugging issues", PERMISSION_ALL);
+
+	cvarManager->registerNotifier("streamapi_drop_frames", [this](vector<string> args) {
+		if (args.size() <= 1) {
+			cvarManager->log("No seconds given for drop frames");
+			return;
+		}
+		float delay;
+		try {
+			delay = std::stof(args[1]);
+		}
+		catch (...) {
+			cvarManager->log("Invalid value for seconds");
+			return;
+		}
+
+		cvarManager->executeCommand("cl_rendering_disabled 1");
+		gameWrapper->SetTimeout([this](GameWrapper* gw) {
+			cvarManager->executeCommand("cl_rendering_disabled 0");
+			}, delay);
+		}, "disables rendering for x number of seconds", PERMISSION_ALL);
+
+	cvarManager->registerNotifier("streamapi_hide_ui", [this](vector<string> args) {
+		if (args.size() <= 1) {
+			cvarManager->log("No seconds given for hide UI");
+			return;
+		}
+		float delay;
+		try {
+			delay = std::stof(args[1]);
+		}
+		catch (...) {
+			cvarManager->log("Invalid value for seconds");
+			return;
+		}
+
+		cvarManager->executeCommand("cl_rendering_scaleform_disabled 1");
+		gameWrapper->SetTimeout([this](GameWrapper* gw) {
+			cvarManager->executeCommand("cl_rendering_scaleform_disabled 0");
+			}, delay);
+		}, "hides UI for x number of seconds", PERMISSION_ALL);
+
+	cvarManager->registerNotifier("streamapi_dickbutt", [this](vector<string> args) {
+		if (args.size() <= 1) {
+			cvarManager->log("No seconds given for dickbutt");
+			return;
+		}
+		float delay;
+		try {
+			delay = std::stof(args[1]);
+		}
+		catch (...) {
+			cvarManager->log("Invalid value for seconds");
+			return;
+		}
+
+		gameWrapper->RegisterDrawable(std::bind(&StreamAPIPlugin::RenderDickButt, this, std::placeholders::_1));
+		gameWrapper->SetTimeout([this](GameWrapper* gw) {
+			gameWrapper->UnregisterDrawables();
+			}, delay);
+		}, "shows dickbutt image in center of screen for x number of seconds", PERMISSION_ALL);
 }
 
 void StreamAPIPlugin::onUnload()
@@ -771,26 +838,26 @@ std::string StreamAPIPlugin::mapCommand(std::string args)
 	return customMapSupport.getMap();
 }
 
-void StreamAPIPlugin::SubmitReport()
+void StreamAPIPlugin::SubmitReport(std::string reportDetails, bool submittedFromUI)
 {
 	gameWrapper->Execute(
-		[this](GameWrapper* gw) {
+		[this, reportDetails, submittedFromUI](GameWrapper* gw) {
 			// Dump data to log before sending log (might not be included in report if exceeds MAX_REPORT_SIZE)
 			cvarManager->log("Dumping data to log before submitting report");
 			onDump(vector<string>{"streamapi_dump", "stale"});
 			onDump(vector<string>{"streamapi_dump"});
-			boost::thread t{ &StreamAPIPlugin::SubmitReportThread, this }; // TODO: join this thread
+			boost::thread t{ &StreamAPIPlugin::SubmitReportThread, this, reportDetails, submittedFromUI }; // TODO: join this thread
 		});
 }
 
-void StreamAPIPlugin::SubmitReportThread() {
-	guiReportStatus = "";
+void StreamAPIPlugin::SubmitReportThread(std::string reportDetails, bool submittedFromUI) {
+	if (submittedFromUI) guiReportStatus = "";
 
 	cvarManager->log("Reading bakkesmod.log");
 	char* buf = (char*)malloc(MAX_REPORT_SIZE);
 	if (!buf) {
-		guiReportStatus = "Failed to allocate buffer for report. Aborting report submission.";
-		cvarManager->log(guiReportStatus);
+		if (submittedFromUI) guiReportStatus = "Failed to allocate buffer for report. Aborting report submission.";
+		cvarManager->log("Failed to allocate buffer for report. Aborting report submission.");
 		return;
 	}
 
@@ -803,21 +870,22 @@ void StreamAPIPlugin::SubmitReportThread() {
 	bufWritten += min(written, MAX_REPORT_SIZE - 1 - bufWritten);
 
 	// Write report to buf
-	if (guiReportDetails[0] != 0) {
-		written = snprintf(&buf[bufWritten], MAX_REPORT_SIZE - bufWritten, "Report:\n%s\n\n", guiReportDetails);
+	if (!reportDetails.empty()) {
+		written = snprintf(&buf[bufWritten], MAX_REPORT_SIZE - bufWritten, "Report:\n%s\n\n", reportDetails.c_str());
 		bufWritten += min(written, MAX_REPORT_SIZE - 1 - bufWritten);
 	}
 
 	// Read bakkesmod.log into buf
 	ifstream fin(gameWrapper->GetBakkesModPath() / "bakkesmod.log");
 	if (fin.fail()) {
-		if (guiReportDetails[0] != 0) {
-			guiReportStatus = "Failed to read bakkesmod.log for submission. Submitting report details without bakkesmod.log data.";
+		if (!reportDetails.empty()) {
+			if (submittedFromUI) guiReportStatus = "Failed to read bakkesmod.log for submission. Submitting report details without bakkesmod.log data.";
+			cvarManager->log("Failed to read bakkesmod.log for submission. Submitting report details without bakkesmod.log data.");
 		}
 		else {
-			guiReportStatus = "Failed to read bakkesmod.log for submission.";
+			if (submittedFromUI) guiReportStatus = "Failed to read bakkesmod.log for submission.";
+			cvarManager->log("Failed to read bakkesmod.log for submission.");
 		}
-		cvarManager->log(guiReportStatus);
 	}
 	else {
 		fin.read(&buf[bufWritten], MAX_REPORT_SIZE - 1 - bufWritten);
@@ -837,16 +905,17 @@ void StreamAPIPlugin::SubmitReportThread() {
 		auto res = cli.Post("/api/rocket-league/stream-api/submit-report", items);
 		if (res) {
 			if (res->status == 200) {
-				guiReportStatus = "Report submitted successfully";
+				if (submittedFromUI) guiReportStatus = "Report submitted successfully";
+				cvarManager->log("Report submission returned status: " + to_string(res->status) + ". " + "Report submitted successfully");
 			}
 			else {
-				guiReportStatus = "Failed to submit report to server: " + res->body;
+				if (submittedFromUI) guiReportStatus = "Failed to submit report to server: " + res->body;
+				cvarManager->log("Report submission returned status: " + to_string(res->status) + ". " + "Failed to submit report to server: " + res->body);
 			}
-			cvarManager->log("Report submission returned status: " + to_string(res->status) + ". " + guiReportStatus);
 		}
 		else {
-			guiReportStatus = "Could not reach report server";
-			cvarManager->log(guiReportStatus);
+			if (submittedFromUI) guiReportStatus = "Could not reach report server";
+			cvarManager->log("Could not reach report server");
 		}
 	}
 	catch (exception e) {
@@ -854,4 +923,11 @@ void StreamAPIPlugin::SubmitReportThread() {
 	}
 
 	free(buf);
+}
+
+void StreamAPIPlugin::RenderDickButt(CanvasWrapper canvas) {
+	if (trollImage->IsLoadedForCanvas()) {
+		canvas.SetPosition((gameWrapper->GetScreenSize() / 2) - (trollImage.get()->GetSize() / 2));
+		canvas.DrawTexture(trollImage.get(), 1);
+	}
 }
