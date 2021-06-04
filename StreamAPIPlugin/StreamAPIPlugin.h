@@ -61,6 +61,14 @@ void LOG(const S& format_str, Args&&... args)
 	_globalCvarManager->log(fmt::format(format_str, args...));
 }
 
+struct Image {
+	std::shared_ptr<ImageWrapper> image;
+	Vector2 position;
+	Vector2 offset;
+	float scale;
+	bool show;
+};
+
 class StreamAPIPlugin : public BakkesMod::Plugin::BakkesModPlugin, public BakkesMod::Plugin::PluginSettingsWindow
 {
 	virtual void onLoad();
@@ -140,9 +148,12 @@ private:
 
 private:
 	/* Pushed Commands */
-	std::shared_ptr<ImageWrapper> trollImage;
+	void runPushCommand(std::vector<std::string> params);
+	bool checkPushConfig(std::string config);
 
-	void RenderDickButt(CanvasWrapper canvas);
+	void render(CanvasWrapper canvas);
+
+	std::map<std::string, Image> images;
 
 private:
 	/* GUI */

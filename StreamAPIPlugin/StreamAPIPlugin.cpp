@@ -7,6 +7,7 @@
 #include <filesystem>
 
 #include <boost/thread.hpp>
+#include <boost/algorithm/string.hpp>
 
 using namespace std;
 namespace fs = std::filesystem;
@@ -36,8 +37,6 @@ void StreamAPIPlugin::onLoad()
 	guiWebSocketStatusLastChecked = std::chrono::system_clock::now();
 	configureHttpServer();
 	customMapSupport.init(gameWrapper->IsUsingSteamVersion(), gameWrapper->GetDataFolder() / "streamapi" / "maps.json");
-	trollImage = std::make_shared<ImageWrapper>(gameWrapper->GetDataFolder() / "streamapi" / "DANCE.gif", true);
-	trollImage->LoadForCanvas();
 	
 	cvarManager->registerNotifier("streamapi_dump", bind(&StreamAPIPlugin::onDump, this, std::placeholders::_1), "dumps loadout data to console", PERMISSION_ALL);
 
@@ -169,71 +168,107 @@ void StreamAPIPlugin::onLoad()
 	commandNameToCommand["rank"] = std::bind(&StreamAPIPlugin::rankCommand, this, std::placeholders::_1);
 	commandNameToCommand["workshop"] = std::bind(&StreamAPIPlugin::workshopCommand, this, std::placeholders::_1);
 	commandNameToCommand["map"] = std::bind(&StreamAPIPlugin::mapCommand, this, std::placeholders::_1);
+
+	gameWrapper->RegisterDrawable(std::bind(&StreamAPIPlugin::render, this, std::placeholders::_1));
 	
 	/* Push Commands */
-	cvarManager->registerNotifier("streamapi_submit_report", [this](vector<string> args) {
+	cvarManager->registerNotifier("streamapi_submit_report", [this](vector<string> params) {
 		SubmitReport("streamapi_submit_report", false);
 		}, "submits a report with bakkesmod.log to website for debugging issues", PERMISSION_ALL);
 
-	cvarManager->registerNotifier("streamapi_drop_frames", [this](vector<string> args) {
-		if (args.size() <= 1) {
-			cvarManager->log("No seconds given for drop frames");
-			return;
+	cvarManager->registerNotifier("streamapi_show_image", [this](vector<string> params) {
+		auto imgPath = fs::path(params.size() > 1 ? params[1] : "dickbutt.png");
+		if (!fs::exists(imgPath)) {
+			imgPath = gameWrapper->GetDataFolder() / "streamapi" / imgPath;
 		}
-		float delay;
-		try {
-			delay = std::stof(args[1]);
-		}
-		catch (...) {
-			cvarManager->log("Invalid value for seconds");
+		if (!fs::exists(imgPath)) {
+			cvarManager->log(L"Path to " + imgPath.wstring() + L" does not exist");
 			return;
 		}
 
-		cvarManager->executeCommand("cl_rendering_disabled 1");
-		gameWrapper->SetTimeout([this](GameWrapper* gw) {
-			cvarManager->executeCommand("cl_rendering_disabled 0");
-			}, delay);
-		}, "disables rendering for x number of seconds", PERMISSION_ALL);
+		string imageId = imgPath.string();
+		Vector2 position{ -1, -1 };
+		Vector2 offset{ -1, -1 };
+		float scale = 1.0;
 
-	cvarManager->registerNotifier("streamapi_hide_ui", [this](vector<string> args) {
-		if (args.size() <= 1) {
-			cvarManager->log("No seconds given for hide UI");
+		if (params.size() > 2) {
+			vector<string> fields;
+			boost::split(fields, params[2], boost::is_any_of(","));
+			for (auto& field : fields) {
+				vector<string> keyValue;
+				boost::split(keyValue, field, boost::is_any_of("="));
+				if (keyValue.size() != 2) {
+					cvarManager->log("image settings must be of the form: setting=value. id value cannot contain any commas or = signs.");
+					return;
+				}
+				try {
+					if (keyValue[0].compare("id") == 0) {
+						imageId = keyValue[1];
+					}
+					else if (keyValue[0].compare("scale") == 0) {
+						scale = stof(keyValue[1]);
+					}
+					else if (keyValue[0].compare("x") == 0) {
+						position.X = stoi(keyValue[1]);
+					}
+					else if (keyValue[0].compare("y") == 0) {
+						position.Y = stoi(keyValue[1]);
+					}
+					else if (keyValue[0].compare("offset_x")) {
+						offset.X = stoi(keyValue[1]);
+					}
+					else if (keyValue[0].compare("offset_y")) {
+						offset.Y = stoi(keyValue[1]);
+					}
+					else {
+						cvarManager->log("Ignoring unknown setting: '" + keyValue[0] + "'");
+					}
+				}
+				catch (...) {
+					cvarManager->log("x, y, offset_x, and offset_y values must specifically be integers (non-decimal/whole numbers) and scale must be a floating point number");
+					return;
+				}
+			}
+		}
+
+		auto it = images.find(imageId);
+		if (it != images.end()) {
+			it->second.position = position;
+			it->second.offset = offset;
+			it->second.scale = scale;
+			it->second.show = true;
+		}
+		else {
+			auto img = Image{ std::make_shared<ImageWrapper>(imgPath, true), position, offset, scale, true };
+			img.image->LoadForCanvas();
+			images.emplace(imageId, img);
+		}		
+		}, "shows image on screen (PNG only), params= <img_path> " \
+			"<optional id=img_id,scale=float/number,x=integer,y=integer,offset_x=integer,offset_y=integer> (img_id cannot contain spaces, commas, or = signs)",
+			PERMISSION_ALL);
+
+	cvarManager->registerNotifier("streamapi_hide_image", [this](vector<string> params) {
+		string imageId = "dickbutt.png";
+		if (params.size() > 1)
+			imageId = params[1];
+
+		auto it = images.find(imageId);
+		if (it != images.end()) {
+			it->second.show = false;
 			return;
 		}
-		float delay;
-		try {
-			delay = std::stof(args[1]);
-		}
-		catch (...) {
-			cvarManager->log("Invalid value for seconds");
+
+		it = images.find((gameWrapper->GetDataFolder() / "streamapi" / imageId).string());
+		if (it != images.end()) {
+			it->second.show = false;
 			return;
 		}
 
-		cvarManager->executeCommand("cl_rendering_scaleform_disabled 1");
-		gameWrapper->SetTimeout([this](GameWrapper* gw) {
-			cvarManager->executeCommand("cl_rendering_scaleform_disabled 0");
-			}, delay);
-		}, "hides UI for x number of seconds", PERMISSION_ALL);
+		cvarManager->log("Failed to find image with id: " + imageId + ". Cannot hide image.");
+		}, "hides image shown by streamapi_show_image, params= <img_id> (image path if no img_id specified to show command)", PERMISSION_ALL);
 
-	cvarManager->registerNotifier("streamapi_dickbutt", [this](vector<string> args) {
-		if (args.size() <= 1) {
-			cvarManager->log("No seconds given for dickbutt");
-			return;
-		}
-		float delay;
-		try {
-			delay = std::stof(args[1]);
-		}
-		catch (...) {
-			cvarManager->log("Invalid value for seconds");
-			return;
-		}
-
-		gameWrapper->RegisterDrawable(std::bind(&StreamAPIPlugin::RenderDickButt, this, std::placeholders::_1));
-		gameWrapper->SetTimeout([this](GameWrapper* gw) {
-			gameWrapper->UnregisterDrawables();
-			}, delay);
-		}, "shows dickbutt image in center of screen for x number of seconds", PERMISSION_ALL);
+	cvarManager->registerNotifier("streamapi_run_cmd", bind(&StreamAPIPlugin::runPushCommand, this, placeholders::_1),
+		"runs given command with optional config to only run in specific situations", PERMISSION_ALL);
 }
 
 void StreamAPIPlugin::onUnload()
@@ -658,12 +693,7 @@ void StreamAPIPlugin::getTrainingPack()
 		}
 
 		auto td = te.GetTrainingData();
-		/*if (td.GetbUnowned() != 1) {
-			return;
-		}*/
-
 		auto tdd = td.GetTrainingData();
-
 		auto code = tdd.GetCode();
 		if (code.IsNull()) {
 			cvarManager->log("code is null");
@@ -838,6 +868,74 @@ std::string StreamAPIPlugin::mapCommand(std::string args)
 	return customMapSupport.getMap();
 }
 
+void StreamAPIPlugin::runPushCommand(std::vector<std::string> params)
+{
+	if (params.size() == 1) {
+		cvarManager->log("No command given");
+		return;
+	}
+
+	if (params.size() > 2) {
+		if (!checkPushConfig(params[2])) {
+			return;
+		}
+	}
+
+	cvarManager->executeCommand("sleep 0; " + params[1]);
+}
+
+bool StreamAPIPlugin::checkPushConfig(std::string config)
+{
+	// Settings allowed: any,other,casual,ranked,extramodes,lan,private
+	unordered_set<string> settings;
+	boost::split(settings, config, boost::is_any_of(","));
+
+	if (settings.find("any") != settings.end())
+		return true;
+	
+	if (gameWrapper->IsInGame()) {
+		auto server = gameWrapper->GetCurrentGameState();
+		if (server.IsNull()) {
+			cvarManager->log("Server is null. Cannot check config for run_cmd. Aborting.");
+			return false;
+		}
+		GameSettingPlaylistWrapper playlistWrapper = server.GetPlaylist();
+		if (playlistWrapper.IsNull()) {
+			cvarManager->log("PlaylistWrapper is null. Cannot check config for run_cmd. Aborting.");
+			return false;
+		}
+
+		if (playlistWrapper.IsPrivateMatch())
+			return settings.find("private") != settings.end();
+		if (playlistWrapper.IsLanMatch())
+			return settings.find("lan") != settings.end();
+
+		int id = playlistWrapper.GetPlaylistId();
+		switch (id) {
+		case (int)StreamAPIPlaylist::RANKEDDUEL:
+		case (int)StreamAPIPlaylist::RANKEDDOUBLES:
+		case (int)StreamAPIPlaylist::RANKEDSTANDARD:
+			return settings.find("ranked") != settings.end();
+		case (int)StreamAPIPlaylist::RANKEDHOOPS:
+		case (int)StreamAPIPlaylist::RANKEDSNOWDAY:
+		case (int)StreamAPIPlaylist::RANKEDRUMBLE:
+		case (int)StreamAPIPlaylist::RANKEDDROPSHOT:
+			return settings.find("extramodes") != settings.end();
+		case (int)StreamAPIPlaylist::DUEL:
+		case (int)StreamAPIPlaylist::DOUBLES:
+		case (int)StreamAPIPlaylist::STANDARD:
+		case (int)StreamAPIPlaylist::CHAOS:
+			return settings.find("casual") != settings.end();
+		default:
+			cvarManager->log("Got unexpected playlist ID: " + to_string(id) + ". Assuming it's a casual playlist.");
+			return settings.find("casual") != settings.end();
+		}		
+	}
+	else {
+		return settings.find("other") != settings.end();
+	}
+}
+
 void StreamAPIPlugin::SubmitReport(std::string reportDetails, bool submittedFromUI)
 {
 	gameWrapper->Execute(
@@ -925,9 +1023,18 @@ void StreamAPIPlugin::SubmitReportThread(std::string reportDetails, bool submitt
 	free(buf);
 }
 
-void StreamAPIPlugin::RenderDickButt(CanvasWrapper canvas) {
-	if (trollImage->IsLoadedForCanvas()) {
-		canvas.SetPosition((gameWrapper->GetScreenSize() / 2) - (trollImage.get()->GetSize() / 2));
-		canvas.DrawTexture(trollImage.get(), 1);
+void StreamAPIPlugin::render(CanvasWrapper canvas) {
+	// Render any images that are shown
+	Vector2 centerPos = gameWrapper->GetScreenSize() / 2;
+	for (auto it = images.begin(); it != images.end(); ++it) {
+		auto img = it->second.image.get();
+		if (it->second.show && img->IsLoadedForCanvas()) {
+			Vector2 position = it->second.position;
+			Vector2 offset = it->second.offset;
+			if (position.X < 0) position.X = centerPos.X - it->second.scale * (img->GetSize().X / 2);
+			if (position.Y < 0) position.Y = centerPos.Y - it->second.scale * (img->GetSize().Y / 2);
+			canvas.SetPosition(position + offset);
+			canvas.DrawTexture(img, it->second.scale);
+		}
 	}
 }
