@@ -109,6 +109,7 @@
     <ClCompile Include="imgui\imgui_timeline.cpp" />
     <ClCompile Include="imgui\imgui_widgets.cpp" />
     <ClCompile Include="Loadout.cpp" />
+    <ClCompile Include="PushCommands.cpp" />
     <ClCompile Include="Ranks.cpp" />
     <ClCompile Include="StreamAPISettingsWindow.cpp" />
     <ClCompile Include="StreamAPIPlugin.cpp" />
@@ -133,6 +134,7 @@
     <ClInclude Include="imgui\imstb_textedit.h" />
     <ClInclude Include="imgui\imstb_truetype.h" />
     <ClInclude Include="Loadout.h" />
+    <ClInclude Include="PushCommands.h" />
     <ClInclude Include="Ranks.h" />
     <ClInclude Include="StreamAPIPlugin.h" />
     <ClInclude Include="version.h" />

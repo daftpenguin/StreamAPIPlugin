@@ -21,7 +21,41 @@ const size_t setupUrlLen = strlen(setupUrl);
 
 void StreamAPIPlugin::RenderSettings()
 {
+	if (showPushCommandConfig) {
+		if (ImGui::Button("Close Action Commands Settings##PushCommandsConfigClose")) {
+			showPushCommandConfig = false;
+		}
+
+		pushCommands.renderSettingsUI();
+	}
+	else {
+		ImGui::TextWrapped("NEW FEATURE! You can now create commands that allow viewers to manipulate your game!");
+		ImGui::TextWrapped("Click the button below to configure commands that can be triggered by your viewers. Then add the commands to your bot to expose them to your viewers (see bot command setup below).");
+
+		if (ImGui::Button("Configure Action Commands (Beta)")) {
+			showPushCommandConfig = true;
+		}
+
+		RenderGeneralSettings();
+	}	
+
+	ImGui::Separator();
+	ImGui::TextWrapped("Stream API Plugin created by DaftPenguin");
+}
+
+void StreamAPIPlugin::RenderGeneralSettings()
+{
 	/* Local bot section */
+
+	string commandsUrl = "https://www.daftpenguin.com/rocket-league/stream-api/commands" + string((useWebSocket ? "" : "/local"));
+	if (ImGui::Button("Open Command Setup Page (in browser)")) {
+		ShellExecute(0, 0, wstring(commandsUrl.begin(), commandsUrl.end()).c_str(), 0, 0, SW_SHOW);
+	}
+	ImGui::TextWrapped("If button doesn't work:");
+	ImGui::SameLine();
+	ImGui::InputText("##CommandsURL", (char*)commandsUrl.c_str(), commandsUrl.size(), ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_ReadOnly);
+
+	ImGui::Separator();
 
 	ImGui::TextWrapped("Local Bot Settings");
 	if (useWebSocket) {
@@ -49,7 +83,7 @@ void StreamAPIPlugin::RenderSettings()
 	ImGui::Separator();
 
 	/* External bot section */
-	
+
 	ImGui::TextWrapped("External Bot Settings");
 
 	if (!useWebSocket) {
@@ -63,7 +97,7 @@ void StreamAPIPlugin::RenderSettings()
 		}
 		ImGui::TextWrapped("If button doesn't work:");
 		ImGui::SameLine();
-		ImGui::InputText("##ExternalSetupURL", (char*) setupUrl, setupUrlLen, ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_ReadOnly);
+		ImGui::InputText("##ExternalSetupURL", (char*)setupUrl, setupUrlLen, ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_ReadOnly);
 
 		if (ImGui::Button("Paste Token")) {
 			auto guiWebSocketToken = ImGui::GetClipboardText();
@@ -98,7 +132,7 @@ void StreamAPIPlugin::RenderSettings()
 		}
 		ImGui::TextWrapped("If button doesn't work:");
 		ImGui::SameLine();
-		ImGui::InputText("##ExternalAPIURL", (char*) apiUrl.c_str(), apiUrl.size(), ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_ReadOnly);
+		ImGui::InputText("##ExternalAPIURL", (char*)apiUrl.c_str(), apiUrl.size(), ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_ReadOnly);
 	}
 
 	ImGui::Separator();
@@ -116,9 +150,6 @@ void StreamAPIPlugin::RenderSettings()
 		ImGui::SameLine();
 		ImGui::TextWrapped(guiReportStatus.c_str());
 	}
-
-	ImGui::Separator();
-	ImGui::TextWrapped("Stream API Plugin created by DaftPenguin");
 }
 
 std::string StreamAPIPlugin::GetPluginName()

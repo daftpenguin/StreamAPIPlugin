@@ -1,0 +1,5 @@
+StreamAPIPlugin*.zip
+.vs/
+build/
+plugins/
+*.TMP

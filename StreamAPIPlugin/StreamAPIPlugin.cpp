@@ -37,6 +37,12 @@ void StreamAPIPlugin::onLoad()
 	guiWebSocketStatusLastChecked = std::chrono::system_clock::now();
 	configureHttpServer();
 	customMapSupport.init(gameWrapper->IsUsingSteamVersion(), gameWrapper->GetDataFolder() / "streamapi" / "maps.json");
+	pushCommands.init(gameWrapper->GetDataFolder() / "streamapi" / "actionCommands.json");
+
+	// Things needed for report submission
+	auto name = gameWrapper->GetPlayerName();
+	playerName = (name.IsNull() ? "" : name.ToString());
+	playerId = gameWrapper->GetUniqueID().GetIdString();
 	
 	cvarManager->registerNotifier("streamapi_dump", bind(&StreamAPIPlugin::onDump, this, std::placeholders::_1), "dumps loadout data to console", PERMISSION_ALL);
 
@@ -267,8 +273,14 @@ void StreamAPIPlugin::onLoad()
 		cvarManager->log("Failed to find image with id: " + imageId + ". Cannot hide image.");
 		}, "hides image shown by streamapi_show_image, params= <img_id> (image path if no img_id specified to show command)", PERMISSION_ALL);
 
-	cvarManager->registerNotifier("streamapi_run_cmd", bind(&StreamAPIPlugin::runPushCommand, this, placeholders::_1),
-		"runs given command with optional config to only run in specific situations", PERMISSION_ALL);
+	cvarManager->registerNotifier("streamapi_run_cmd", [this](vector<string> params) {
+		if (params.size() < 2) {
+			cvarManager->log("no command name given");
+			return;
+		}
+		cvarManager->log("Running command: " + params[1]);
+		pushCommands.execute(cvarManager, gameWrapper, params[1]);
+		}, "runs given command with optional config to only run in specific situations", PERMISSION_ALL);
 }
 
 void StreamAPIPlugin::onUnload()
@@ -868,74 +880,6 @@ std::string StreamAPIPlugin::mapCommand(std::string args)
 	return customMapSupport.getMap();
 }
 
-void StreamAPIPlugin::runPushCommand(std::vector<std::string> params)
-{
-	if (params.size() == 1) {
-		cvarManager->log("No command given");
-		return;
-	}
-
-	if (params.size() > 2) {
-		if (!checkPushConfig(params[2])) {
-			return;
-		}
-	}
-
-	cvarManager->executeCommand("sleep 0; " + params[1]);
-}
-
-bool StreamAPIPlugin::checkPushConfig(std::string config)
-{
-	// Settings allowed: any,other,casual,ranked,extramodes,lan,private
-	unordered_set<string> settings;
-	boost::split(settings, config, boost::is_any_of(","));
-
-	if (settings.find("any") != settings.end())
-		return true;
-	
-	if (gameWrapper->IsInGame()) {
-		auto server = gameWrapper->GetCurrentGameState();
-		if (server.IsNull()) {
-			cvarManager->log("Server is null. Cannot check config for run_cmd. Aborting.");
-			return false;
-		}
-		GameSettingPlaylistWrapper playlistWrapper = server.GetPlaylist();
-		if (playlistWrapper.IsNull()) {
-			cvarManager->log("PlaylistWrapper is null. Cannot check config for run_cmd. Aborting.");
-			return false;
-		}
-
-		if (playlistWrapper.IsPrivateMatch())
-			return settings.find("private") != settings.end();
-		if (playlistWrapper.IsLanMatch())
-			return settings.find("lan") != settings.end();
-
-		int id = playlistWrapper.GetPlaylistId();
-		switch (id) {
-		case (int)StreamAPIPlaylist::RANKEDDUEL:
-		case (int)StreamAPIPlaylist::RANKEDDOUBLES:
-		case (int)StreamAPIPlaylist::RANKEDSTANDARD:
-			return settings.find("ranked") != settings.end();
-		case (int)StreamAPIPlaylist::RANKEDHOOPS:
-		case (int)StreamAPIPlaylist::RANKEDSNOWDAY:
-		case (int)StreamAPIPlaylist::RANKEDRUMBLE:
-		case (int)StreamAPIPlaylist::RANKEDDROPSHOT:
-			return settings.find("extramodes") != settings.end();
-		case (int)StreamAPIPlaylist::DUEL:
-		case (int)StreamAPIPlaylist::DOUBLES:
-		case (int)StreamAPIPlaylist::STANDARD:
-		case (int)StreamAPIPlaylist::CHAOS:
-			return settings.find("casual") != settings.end();
-		default:
-			cvarManager->log("Got unexpected playlist ID: " + to_string(id) + ". Assuming it's a casual playlist.");
-			return settings.find("casual") != settings.end();
-		}		
-	}
-	else {
-		return settings.find("other") != settings.end();
-	}
-}
-
 void StreamAPIPlugin::SubmitReport(std::string reportDetails, bool submittedFromUI)
 {
 	gameWrapper->Execute(
@@ -964,7 +908,14 @@ void StreamAPIPlugin::SubmitReportThread(std::string reportDetails, bool submitt
 	int errno;
 
 	// Write token to buf
-	written = snprintf(&buf[bufWritten], MAX_REPORT_SIZE - bufWritten, "Token: %s\n\n", webSocket.getToken().c_str()); // TODO: Do we need to worry about encoding?
+	cvarManager->log("Writing token to buffer");
+	written = snprintf(&buf[bufWritten], MAX_REPORT_SIZE - bufWritten, "Token: %s\n\n", webSocket.getToken().c_str());
+	bufWritten += min(written, MAX_REPORT_SIZE - 1 - bufWritten);
+
+	// Write user info to buf
+	cvarManager->log("Writing name and UID to buffer");
+	written = snprintf(&buf[bufWritten], MAX_REPORT_SIZE - bufWritten, "User: %s (%s)\nBMVersion: %d\nPlugin: %s\nIsSteamVersion: %d\n\n",
+		playerName.c_str(), playerId.c_str(), gameWrapper->GetBakkesModVersion(), plugin_version, gameWrapper->IsUsingSteamVersion());
 	bufWritten += min(written, MAX_REPORT_SIZE - 1 - bufWritten);
 
 	// Write report to buf
@@ -986,10 +937,21 @@ void StreamAPIPlugin::SubmitReportThread(std::string reportDetails, bool submitt
 		}
 	}
 	else {
+		fin.seekg(0, std::ios::end);
+		streampos fsize = fin.tellg();
+		fin.seekg(0);
+
+		bool severeHead = fsize > MAX_REPORT_SIZE - bufWritten;
+		if (severeHead) {
+			fin.read(&buf[bufWritten], min(REPORT_SEVERED_HEAD_SIZE, MAX_REPORT_SIZE - 1 - bufWritten));
+			bufWritten += fin.gcount();
+			snprintf(&buf[bufWritten], MAX_REPORT_SIZE - bufWritten, "\n...\n");
+			fin.seekg(fsize);
+			fin.seekg(-1 * (MAX_REPORT_SIZE - 1 - bufWritten));
+		}
+
 		fin.read(&buf[bufWritten], MAX_REPORT_SIZE - 1 - bufWritten);
-		size_t n = fin.gcount();
-		bufWritten += n;
-		cvarManager->log("Read " + to_string(n) + " bytes from bakkesmod.log into buffer of size " + to_string(MAX_REPORT_SIZE));
+		bufWritten += fin.gcount();
 		buf[bufWritten] = 0;
 	}
 

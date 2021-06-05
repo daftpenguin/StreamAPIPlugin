@@ -11,6 +11,7 @@
 #include "WebSocket.h"
 #include "imgui/imgui.h"
 #include "CustomMapSupport.h"
+#include "PushCommands.h"
 
 #include <string>
 #include <vector>
@@ -49,7 +50,8 @@ const std::string CAMERA_INVERT_SWIVEL_CHANGED_EVENT = "Function TAGame.GFxData_
 const std::string CAMERA_SHAKE_CHANGED_EVENT = "Function TAGame.GFxData_Settings_TA.SetCameraShake";
 const std::string RANKS_UPDATE_EVENT = "Function TAGame.GameEvent_Soccar_TA.EventMatchWinnerSet";
 
-const unsigned int MAX_REPORT_SIZE = 20000 * 512;
+const unsigned int MAX_REPORT_SIZE = 50000 * 1024;
+const unsigned int REPORT_SEVERED_HEAD_SIZE = 2000 * 1024;
 constexpr auto REPORT_SERVER_URL = "https://www.daftpenguin.com";
 //constexpr auto REPORT_SERVER_URL = "http://localhost:9000";
 
@@ -147,13 +149,11 @@ private:
 	WebSocket webSocket;
 
 private:
-	/* Pushed Commands */
-	void runPushCommand(std::vector<std::string> params);
-	bool checkPushConfig(std::string config);
-
+	/* Push Commands */
 	void render(CanvasWrapper canvas);
 
 	std::map<std::string, Image> images;
+	PushCommands pushCommands;
 
 private:
 	/* GUI */
@@ -166,8 +166,12 @@ private:
 	std::chrono::system_clock::time_point guiWebSocketStatusLastChecked;
 	char guiReportDetails[1024];
 	std::string guiReportStatus;
+	std::string playerName;
+	std::string playerId;
+	bool showPushCommandConfig;
 
 	void RenderSettings();
+	void RenderGeneralSettings();
 	std::string GetPluginName();
 	void SetImGuiContext(uintptr_t ctx);
 };
