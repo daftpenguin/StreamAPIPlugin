@@ -119,8 +119,7 @@ void StreamAPIPlugin::onLoad()
 	webSocket.setData("map", customMapSupport.getMap());
 
 	mmrNotifierToken = gameWrapper->GetMMRWrapper().RegisterMMRNotifier([this](UniqueIDWrapper id) {
-		// Workaround since Epic version doesn't appear to get MMR notifications for local user
-		if (gameWrapper->IsUsingEpicVersion() && updateRankOnNextNotification) {
+		if (updateRankOnNextNotification) {
 			updateRankOnNextNotification = false;
 			gameWrapper->SetTimeout([this](GameWrapper* gw) {
 				ranks.getRanks(gameWrapper);
@@ -128,11 +127,13 @@ void StreamAPIPlugin::onLoad()
 				}, 3.0f);
 		}
 
+		/*
 		if (gameWrapper->IsUsingSteamVersion() && id.GetIdString().compare(gameWrapper->GetUniqueID().GetIdString()) == 0) {
 			ranks.updateRank(gameWrapper);
 			webSocket.setData("rank", ranks.toString("json", cvarManager));
 			updateRankOnNextNotification = false;
 		}
+		*/
 		});
 	
 	gameWrapper->SetTimeout([this](GameWrapper* gw) { // Doesn't appear to update when ranks are initially retrieved
@@ -183,6 +184,8 @@ void StreamAPIPlugin::onLoad()
 		}, "submits a report with bakkesmod.log to website for debugging issues", PERMISSION_ALL);
 
 	cvarManager->registerNotifier("streamapi_show_image", [this](vector<string> params) {
+		// TODO: Don't load same image multiple times, do references to same image
+
 		auto imgPath = fs::path(params.size() > 1 ? params[1] : "dickbutt.png");
 		if (!fs::exists(imgPath)) {
 			imgPath = gameWrapper->GetDataFolder() / "streamapi" / imgPath;
@@ -220,10 +223,10 @@ void StreamAPIPlugin::onLoad()
 					else if (keyValue[0].compare("y") == 0) {
 						position.Y = stoi(keyValue[1]);
 					}
-					else if (keyValue[0].compare("offset_x")) {
+					else if (keyValue[0].compare("x_offset") == 0) {
 						offset.X = stoi(keyValue[1]);
 					}
-					else if (keyValue[0].compare("offset_y")) {
+					else if (keyValue[0].compare("y_offset") == 0) {
 						offset.Y = stoi(keyValue[1]);
 					}
 					else {
@@ -280,7 +283,7 @@ void StreamAPIPlugin::onLoad()
 		}
 		cvarManager->log("Running command: " + params[1]);
 		pushCommands.execute(cvarManager, gameWrapper, params[1]);
-		}, "runs given command with optional config to only run in specific situations", PERMISSION_ALL);
+		}, "runs command associated with given command query (cmd_name=<name>&<param1>=<value1>&...)", PERMISSION_ALL);
 }
 
 void StreamAPIPlugin::onUnload()

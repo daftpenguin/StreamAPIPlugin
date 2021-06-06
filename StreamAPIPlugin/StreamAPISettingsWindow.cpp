@@ -19,25 +19,44 @@ const wchar_t* setupUrlW = L"https://www.daftpenguin.com/rocket-league/stream-ap
 const char* setupUrl = "https://www.daftpenguin.com/rocket-league/stream-api/setup";
 const size_t setupUrlLen = strlen(setupUrl);
 
+std::vector<std::string> announcement = {
+	{"NEW FEATURE! Allow your viewers to activate commands that perform actions in your game. See the \"Action Commands\" tab below."},
+};
+
 void StreamAPIPlugin::RenderSettings()
 {
-	if (showPushCommandConfig) {
-		if (ImGui::Button("Close Action Commands Settings##PushCommandsConfigClose")) {
-			showPushCommandConfig = false;
+	if (announcement.size() > 0) {
+		ImGui::Dummy(ImVec2(0.0f, 10.0f));
+		for (auto& line : announcement) {
+			// Indent doesn't work well here, as I think there's already an indent being used in BM's settings window
+			ImGui::Dummy(ImVec2(10.0f, 0.0f));
+			ImGui::SameLine();
+			ImGui::TextWrapped(line.c_str());
 		}
-
-		pushCommands.renderSettingsUI();
+		ImGui::Dummy(ImVec2(0.0f, 10.0f));
+		ImGui::Separator();
 	}
-	else {
-		ImGui::TextWrapped("NEW FEATURE! You can now create commands that allow viewers to manipulate your game!");
-		ImGui::TextWrapped("Click the button below to configure commands that can be triggered by your viewers. Then add the commands to your bot to expose them to your viewers (see bot command setup below).");
+	
+	ImGui::Dummy(ImVec2(0.0f, 10.0f));
 
-		if (ImGui::Button("Configure Action Commands (Beta)")) {
-			showPushCommandConfig = true;
+	if (ImGui::BeginTabBar("TabBar", ImGuiTabBarFlags_None)) {
+		if (ImGui::BeginTabItem("API Settings")) {
+			RenderGeneralSettings();
+			ImGui::EndTabItem();
 		}
 
-		RenderGeneralSettings();
-	}	
+		if (ImGui::BeginTabItem("Action Commands (beta)")) {
+			RenderPushCommands();
+			ImGui::EndTabItem();
+		}
+
+		if (ImGui::BeginTabItem("Report Bug")) {
+			RenderReportSubmission();
+			ImGui::EndTabItem();
+		}
+
+		ImGui::EndTabBar();
+	}
 
 	ImGui::Separator();
 	ImGui::TextWrapped("Stream API Plugin created by DaftPenguin");
@@ -45,7 +64,8 @@ void StreamAPIPlugin::RenderSettings()
 
 void StreamAPIPlugin::RenderGeneralSettings()
 {
-	/* Local bot section */
+	ImGui::TextWrapped("Click enable button to toggle between internal and external bot support.");
+	ImGui::TextWrapped("TO USE EXTERNAL BOT SUPPORT, YOU MUST LOG INTO MY WEBSITE AND GENERATE A TOKEN. CLICK THE BUTTON TO OPEN THE SETUP PAGE IN YOUR BROWSER.");
 
 	string commandsUrl = "https://www.daftpenguin.com/rocket-league/stream-api/commands" + string((useWebSocket ? "" : "/local"));
 	if (ImGui::Button("Open Command Setup Page (in browser)")) {
@@ -56,6 +76,8 @@ void StreamAPIPlugin::RenderGeneralSettings()
 	ImGui::InputText("##CommandsURL", (char*)commandsUrl.c_str(), commandsUrl.size(), ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_ReadOnly);
 
 	ImGui::Separator();
+
+	/* Local bot section */
 
 	ImGui::TextWrapped("Local Bot Settings");
 	if (useWebSocket) {
@@ -134,17 +156,34 @@ void StreamAPIPlugin::RenderGeneralSettings()
 		ImGui::SameLine();
 		ImGui::InputText("##ExternalAPIURL", (char*)apiUrl.c_str(), apiUrl.size(), ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_ReadOnly);
 	}
+}
 
-	ImGui::Separator();
+void StreamAPIPlugin::RenderPushCommands()
+{
+	pushCommands.renderSettingsUI(cvarManager, gameWrapper);
+}
 
-	ImGui::TextWrapped("Report an issue:");
-	ImGui::TextWrapped("Sometimes weird things happen and features don't work the way they're supposed to. Your bakkesmod.log file can help.");
-	ImGui::TextWrapped("By clicking submit, your bakkesmod.log file, token details, and any info you share below (optional) will be sent to my server so that I can debug the issue.");
+void StreamAPIPlugin::RenderReportSubmission()
+{
+	ImGui::TextWrapped("Sometimes weird things happen and features don't work the way they're supposed to. If you notice a bug, you can use the form below to submit a report.");
+	ImGui::TextWrapped("By clicking submit, your bakkesmod.log file, token details, and any info you share below will be sent to my server so that I can debug the issue.");
 	ImGui::TextWrapped("PLEASE provide your streaming account name in the details if you don't have external bot support configured, as I have no way to follow up.");
 	ImGui::TextWrapped("I am notified within minutes of new reports, so I may pop into your stream if I am free.");
 	ImGui::InputTextMultiline("Details", guiReportDetails, sizeof(guiReportDetails));
 	if (ImGui::Button("Submit")) {
-		SubmitReport(string(guiReportDetails), true);
+		guiReportStatus = "";
+		bool tokenConfigured = !webSocket.getToken().empty();
+		if (guiReportDetails[0] == '\0' && (!useWebSocket || !tokenConfigured)) {
+			if (!useWebSocket) {
+				guiReportStatus = "You must provide details (and contact details please) to report an issue with internal bot support enabled.";
+			}
+			else {
+				guiReportStatus = "You must provide details (and contact details please) to report an issue without setting your external bot token.";
+			}
+		}
+		else {
+			SubmitReport(string(guiReportDetails), true);
+		}
 	}
 	if (!guiReportStatus.empty()) {
 		ImGui::SameLine();

@@ -57,8 +57,9 @@ void from_json(const json& j, PushCommand& c)
 
 /* PushCommand */
 
-PushCommand::PushCommand(std::string name) : name(name), command(""), enabled(false), anyTimeEnabled(false), casualEnabled(false), rankedEnabled(false),
-	extraModesEnabled(false), privateMatchEnabled(false), lanMatchEnabled(false), otherEnabled(false), editing(false)
+PushCommand::PushCommand(std::string name, std::string command, bool enabled, bool anyTime) : name(name), command(command), enabled(enabled),
+	anyTimeEnabled(anyTime), casualEnabled(false), rankedEnabled(false), extraModesEnabled(false), privateMatchEnabled(false),
+	lanMatchEnabled(false), otherEnabled(false), editing(false)
 {
 	strncpy(nameBuffer, name.c_str(), MAX_COMMAND_NAME_SIZE);
 	strncpy(commandBuffer, command.c_str(), MAX_COMMAND_SIZE);
@@ -71,76 +72,37 @@ void PushCommand::save()
 	command = string(commandBuffer);
 }
 
-void PushCommand::execute(std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw, std::map<std::string, std::string>& params)
+void PushCommand::execute(std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw, std::string& command)
 {
 	if (checkConditions(cv, gw)) {
-		string modifiedCommand = command;
-		for (auto it = params.begin(); it != params.end(); ++it) {
-			boost::replace_all(modifiedCommand, "${" + it->first + "}", it->second);
-		}
-
-		cv->executeCommand("sleep 0; " + modifiedCommand);
+		cv->executeCommand("sleep 0; " + command);
 	}
 	else {
 		cv->log("Conditions failed, cannot execute command.");
 	}
 }
 
-void PushCommand::renderUISetting(std::function<void(std::string& cmdName)> saveFunction, std::function<void(std::string& cmdName)> removeFunction)
+void PushCommand::execute(std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw)
 {
-	ImGui::Separator();
+	execute(cv, gw, command);
+}
 
-	if (editing) {
-		if (ImGui::Button(("Save##" + name).c_str())) {
-			saveFunction(name);
-		}
+void PushCommand::execute(std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw, std::map<std::string, std::string>& params)
+{
+	string modifiedCommand = command;
+	for (auto it = params.begin(); it != params.end(); ++it) {
+		boost::replace_all(modifiedCommand, "${" + it->first + "}", it->second);
 	}
-	else {
-		if (ImGui::Button(("Edit##" + name).c_str())) {
-			editing = true;
-		}
-	}
-	ImGui::SameLine();
-	if (ImGui::Button(("Remove##" + name).c_str())) {
-		removeFunction(name);
-	}
-	ImGui::SameLine();
-	if (enabled) {
-		if (ImGui::Button(("Disable##" + name).c_str())) {
-			enabled = false;
-			saveFunction(name);
-		}
-	}
-	else {
-		if (ImGui::Button(("Enable##" + name).c_str())) {
-			enabled = true;
-			saveFunction(name);
-		}
-	}
+	execute(cv, gw, modifiedCommand);
+}
 
-	if (!editing) {
-		ImGui::TextWrapped("Name: %s", name.c_str());
-		ImGui::TextWrapped("Command: %s", command.c_str());
+void PushCommand::testCommandBuffer(std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw, std::map<std::string, std::string>& params)
+{
+	string modifiedCommand = commandBuffer;
+	for (auto it = params.begin(); it != params.end(); ++it) {
+		boost::replace_all(modifiedCommand, "${" + it->first + "}", it->second);
 	}
-	else {
-		ImGui::InputText(("Name##" + name).c_str(), nameBuffer, MAX_COMMAND_NAME_SIZE);
-		ImGui::InputText(("Command##" + name).c_str(), commandBuffer, MAX_COMMAND_SIZE);
-
-		ImGui::Text("Conditions:");
-		ImGui::Checkbox(("Always##" + name).c_str(), &anyTimeEnabled);
-		ImGui::SameLine();
-		ImGui::Checkbox(("Casual##" + name).c_str(), &casualEnabled);
-		ImGui::SameLine();
-		ImGui::Checkbox(("Ranked##" + name).c_str(), &rankedEnabled);
-		ImGui::SameLine();
-		ImGui::Checkbox(("Extra Modes##" + name).c_str(), &extraModesEnabled);
-		ImGui::SameLine();
-		ImGui::Checkbox(("Private Match##" + name).c_str(), &privateMatchEnabled);
-		ImGui::SameLine();
-		ImGui::Checkbox(("LAN Match##" + name).c_str(), &lanMatchEnabled);
-		ImGui::SameLine();
-		ImGui::Checkbox(("Other##" + name).c_str(), &otherEnabled);
-	}
+	execute(cv, gw, modifiedCommand);
 }
 
 bool PushCommand::checkConditions(std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw)
@@ -200,31 +162,6 @@ void PushCommands::init(std::filesystem::path jsonPath)
 {
 	this->jsonPath = jsonPath;
 	loadJson();
-}
-
-void PushCommands::renderSettingsUI()
-{
-	if (!commandsLoaded) {
-		ImGui::TextWrapped("Commands haven't yet loaded from json file. These should load rather quickly so if you're seeing this message, check bakkesmod.log for errors.");
-	}
-	else {
-		ImGui::TextWrapped("Click add a command, give it a name, then give it a console command to run (or sequence of console commands separated by ;). Enable the command and set conditions for when the command can be run (\"other\" is any time the other conditions don't apply except \"always\").");
-		ImGui::TextWrapped("Advanced users: commands also support named placeholders to allow command configuration to be exposed outside of the plugin. For instance, the command \"cl_rendering_disabled 1; sleep ${duration}; cl_rendering_disabled 0\" will disable frames for the given duration (in milliseconds). You could then make a command in your chat bot that can generate a number from say 1,000 to 10,000, and then append that value as a parameter in the URL request to the API as &duration=<value>. For any added parameters &param=value, the plugin will search the console commands configured in the plugin for ${param} and replace it with value.");
-
-		if (!errorMsg.empty()) {
-			ImGui::Separator();
-			ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_PlotLinesHovered), string("Error: " + errorMsg).c_str());
-		}
-
-		for (auto it = commands.begin(); it != commands.end(); ++it) {
-			it->second.renderUISetting(bind(&PushCommands::saveCommand, this, placeholders::_1), bind(&PushCommands::removeCommand, this, placeholders::_1));
-		}
-		ImGui::Separator();
-
-		if (ImGui::Button("Add Command")) {
-			add();
-		}
-	}
 }
 
 void PushCommands::loadJson()
@@ -373,4 +310,149 @@ void PushCommands::execute(std::shared_ptr<CVarManagerWrapper> cv, std::shared_p
 	}
 
 	it->second.execute(cv, gw, params);
+}
+
+/* GUI Related Methods */
+
+struct SampleCommand {
+	std::string name;
+	int hideSettingsSecs;
+	PushCommand command;
+};
+
+std::vector<SampleCommand> sampleCommands({
+	SampleCommand{ "Troll images for ~5 seconds", 5, PushCommand("show_image", "streamapi_show_image dickbutt.png id=img4,scale=0.3,y_offset=300; sleep 250; streamapi_show_image dickbutt.png id=img1,scale=0.5; sleep 250; streamapi_show_image dickbutt.png id=img2,scale=0.3,x_offset=-300; sleep 250; streamapi_show_image dickbutt.png id=img3,scale=0.3,x_offset=300; sleep 250; streamapi_show_image dickbutt.png id=img5,scale=0.3,y_offset=-300; sleep 2500; streamapi_hide_image img1; sleep 250; streamapi_hide_image img2; sleep 250; streamapi_hide_image img3; sleep 250; streamapi_hide_image img4; sleep 250; streamapi_hide_image img5;", true, true) },
+	SampleCommand{ "Black Screen for 2 seconds", 2, PushCommand("black_screen", "cl_rendering_disabled 1; sleep 2000; cl_rendering_disabled 0", true, true) },
+	SampleCommand{ "Hide UI for 2 seconds (boost meter and scoreboard in game)", 2, PushCommand("hide_ui", "cl_rendering_scaleform_disabled 1; sleep 2000; cl_rendering_scaleform_disabled 0", true, true) },
+	});
+
+
+void PushCommands::renderSettingsUI(std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw)
+{
+	if (!commandsLoaded) {
+		ImGui::TextWrapped("Commands haven't yet loaded from json file. These should load rather quickly so if you're seeing this message, check bakkesmod.log for errors.");
+	}
+	else {
+		ImGui::TextWrapped("Click add a command, give it a name, then give it a console command to run (or sequence of console commands separated by ;). Enable the command and set conditions for when the command can be run (\"other\" is any time the other conditions don't apply except \"always\").");
+		ImGui::TextWrapped("Advanced users: commands also support named placeholders like ${name} to allow command configuration to be exposed outside of the plugin. Try adding the black screen sample command, edit it, then replace \"sleep 2000\" with \"sleep ${duration}\". Test the command by putting \"duration=5000\" in the params box then click test button.");
+		ImGui::TextWrapped("Check the commands web page for instructions on how to parameterize your bot commands.");
+
+		ImGui::Separator();
+
+		ImGui::Text("SAMPLE COMMANDS:");
+		ImGui::TextWrapped("Here are a few sample commands to get you started. Click the test button to see what happens when the command is executed. Click the add button to actually add it to the set of commands that can be activated in chat.");
+
+		for (auto& command : sampleCommands) {
+			ImGui::Text(command.name.c_str());
+			ImGui::SameLine();
+			if (ImGui::Button(("Test##TestSampleCommand" + command.name).c_str())) {
+				if (command.hideSettingsSecs > 0) {
+					cv->executeCommand("togglemenu settings; sleep " + to_string(command.hideSettingsSecs) + "000; togglemenu settings");
+				}
+				command.command.execute(cv, gw);
+
+			}
+			ImGui::SameLine();
+			if (ImGui::Button(("Add##AddSampleCommand" + command.name).c_str())) {
+				// Find available name, then add it
+				if (commands.find(command.command.name) == commands.end()) {
+					// TODO: command.command.command? ffs we should probably leverage inheritence or some shit...
+					commands.emplace(command.command.name, PushCommand(command.command.name, command.command.command, true, true));
+				}
+				else {
+					string cmdName = command.command.name + "1";
+					for (int cmdNum = 1; commands.find(cmdName) != commands.end(); cmdName = command.command.name + to_string(++cmdNum));
+					commands.emplace(cmdName, PushCommand(cmdName, command.command.command, true, true));
+				}
+				saveJson();
+			}
+		}
+
+		if (!errorMsg.empty()) {
+			ImGui::Separator();
+			ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_PlotLinesHovered), string("Error: " + errorMsg).c_str());
+		}
+
+		for (auto it = commands.begin(); it != commands.end(); ++it) {
+			it->second.renderUISetting(cv, gw, bind(&PushCommands::saveCommand, this, placeholders::_1), bind(&PushCommands::removeCommand, this, placeholders::_1));
+		}
+		ImGui::Separator();
+
+		if (ImGui::Button("Add Command")) {
+			add();
+		}
+	}
+}
+
+
+void PushCommand::renderUISetting(std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw,
+	std::function<void(std::string& cmdName)> saveFunction, std::function<void(std::string& cmdName)> removeFunction)
+{
+	ImGui::Separator();
+
+	if (editing) {
+		if (ImGui::Button(("Save##" + name).c_str())) {
+			saveFunction(name);
+		}
+	}
+	else {
+		if (ImGui::Button(("Edit##" + name).c_str())) {
+			editing = true;
+		}
+	}
+	ImGui::SameLine();
+	if (ImGui::Button(("Remove##" + name).c_str())) {
+		removeFunction(name);
+	}
+	ImGui::SameLine();
+	if (enabled) {
+		if (ImGui::Button(("Disable##" + name).c_str())) {
+			enabled = false;
+			saveFunction(name);
+		}
+	}
+	else {
+		if (ImGui::Button(("Enable##" + name).c_str())) {
+			enabled = true;
+			saveFunction(name);
+		}
+	}
+
+	ImGui::SameLine();
+	ImGui::PushItemWidth(200.0f);
+	ImGui::InputTextWithHint(("Test params##TestParams" + name).c_str(), "Hint: p1=v1,p2=v2", testParams, MAX_TEST_PARAMS_SIZE);
+	ImGui::SameLine();
+	if (ImGui::Button(("Test##TestCommandInLibrary" + name).c_str())) {
+		map<string, string> params;
+		vector<string> fields;
+		boost::split(fields, testParams, boost::is_any_of(","));
+		for (auto& field : fields) {
+			auto equalIdx = field.find_first_of('=');
+			if (equalIdx == string::npos) {
+				params.emplace(field, "1");
+			}
+			else {
+				params.emplace(field.substr(0, equalIdx), field.substr(equalIdx + 1));
+			}
+		}
+		testCommandBuffer(cv, gw, params);
+	}
+
+	if (!editing) {
+		ImGui::TextWrapped("Name: %s", name.c_str());
+		ImGui::TextWrapped("Command: %s", command.c_str());
+	}
+	else {
+		ImGui::InputText(("Name##" + name).c_str(), nameBuffer, MAX_COMMAND_NAME_SIZE);
+		ImGui::InputText(("Command##" + name).c_str(), commandBuffer, MAX_COMMAND_SIZE);
+
+		ImGui::Text("Conditions:"); ImGui::SameLine();
+		ImGui::Checkbox(("Always##" + name).c_str(), &anyTimeEnabled); ImGui::SameLine();
+		ImGui::Checkbox(("Casual##" + name).c_str(), &casualEnabled); ImGui::SameLine();
+		ImGui::Checkbox(("Ranked##" + name).c_str(), &rankedEnabled); ImGui::SameLine();
+		ImGui::Checkbox(("Extra Modes##" + name).c_str(), &extraModesEnabled); ImGui::SameLine();
+		ImGui::Checkbox(("Private Match##" + name).c_str(), &privateMatchEnabled); ImGui::SameLine();
+		ImGui::Checkbox(("LAN Match##" + name).c_str(), &lanMatchEnabled); ImGui::SameLine();
+		ImGui::Checkbox(("Other##" + name).c_str(), &otherEnabled);
+	}
 }

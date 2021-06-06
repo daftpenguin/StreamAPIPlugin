@@ -168,10 +168,11 @@ private:
 	std::string guiReportStatus;
 	std::string playerName;
 	std::string playerId;
-	bool showPushCommandConfig;
 
 	void RenderSettings();
 	void RenderGeneralSettings();
+	void RenderPushCommands();
+	void RenderReportSubmission();
 	std::string GetPluginName();
 	void SetImGuiContext(uintptr_t ctx);
 };

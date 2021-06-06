@@ -8,20 +8,27 @@
 #include <filesystem>
 
 #define MAX_COMMAND_NAME_SIZE 128
-#define MAX_COMMAND_SIZE 1024
+#define MAX_COMMAND_SIZE 4096
+#define MAX_TEST_PARAMS_SIZE 512
 
 class PushCommand {
 public:
+	PushCommand(std::string name, std::string command, bool enabled, bool anyTime);
+	PushCommand(std::string name) : PushCommand(name, "", false, false) {};
 	PushCommand() : PushCommand("") { };
-	PushCommand(std::string name);
 	void save();
+	void execute(std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw);
 	void execute(std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw, std::map<std::string, std::string>& params);
-	void renderUISetting(std::function<void(std::string& cmdName)> saveFunction, std::function<void (std::string& cmdName)> removeFunction);
+	void testCommandBuffer(std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw, std::map<std::string, std::string>& params);
+	void renderUISetting(std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw,
+		std::function<void(std::string& cmdName)> saveFunction, std::function<void (std::string& cmdName)> removeFunction);
 
 	std::string name;
 	char nameBuffer[MAX_COMMAND_NAME_SIZE] = { 0 }; // For UI
 	std::string command;
 	char commandBuffer[MAX_COMMAND_SIZE] = { 0 }; // For UI
+
+	char testParams[MAX_TEST_PARAMS_SIZE] = { 0 }; // For UI
 
 	bool enabled;
 	bool anyTimeEnabled;
@@ -33,6 +40,7 @@ public:
 	bool otherEnabled;
 
 private:
+	void execute(std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw, std::string& command);
 	bool checkConditions(std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw);
 
 	bool editing;
@@ -42,7 +50,7 @@ class PushCommands {
 public:
 	PushCommands();
 	void init(std::filesystem::path jsonPath);
-	void renderSettingsUI();
+	void renderSettingsUI(std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw);
 	void execute(std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw, std::string query);
 
 private:
