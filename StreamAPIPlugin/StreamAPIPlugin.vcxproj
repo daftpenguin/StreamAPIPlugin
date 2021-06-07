@@ -113,6 +113,7 @@
     <ClCompile Include="Ranks.cpp" />
     <ClCompile Include="StreamAPISettingsWindow.cpp" />
     <ClCompile Include="StreamAPIPlugin.cpp" />
+    <ClCompile Include="Util.cpp" />
     <ClCompile Include="WebSocket.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -137,6 +138,7 @@
     <ClInclude Include="PushCommands.h" />
     <ClInclude Include="Ranks.h" />
     <ClInclude Include="StreamAPIPlugin.h" />
+    <ClInclude Include="Util.h" />
     <ClInclude Include="version.h" />
     <ClInclude Include="WebSocket.h" />
     <ClInclude Include="WebSocketDataField.h" />

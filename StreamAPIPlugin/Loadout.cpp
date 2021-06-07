@@ -2,6 +2,7 @@
 #include "StreamAPIPlugin.h"
 #include "BMLoadoutLib/helper_classes.h"
 #include "nlohmann/json.hpp"
+#include "Util.h"
 
 #include <bakkesmod/wrappers/PluginManagerWrapper.h>
 #include <iomanip>
@@ -638,6 +639,7 @@ void LoadoutItem::handleAttributes(ArrayWrapper<ProductAttributeWrapper> attrs, 
 	}
 	for (int i = 0; i < attrs.Count(); i++) {
 		auto attr = attrs.Get(i);
+		if (attr.IsNull()) continue;
 		if (attr.GetAttributeType().compare("ProductAttribute_Certified_TA") == 0) {
 			auto statName = gw->GetItemsWrapper().GetCertifiedStatDB().GetStatName(ProductAttribute_CertifiedWrapper(attr.memory_address).GetStatId());
 			ss << " " << statName << " Certified";
@@ -1081,7 +1083,7 @@ void AlphaConsoleTextures::loadTexturesForSlot(std::shared_ptr<CVarManagerWrappe
 							this->textures[slot].emplace(itemName, AlphaConsoleTexture{ skinID, bodyID });
 						}
 						catch (...) {
-							cv->log(L"Exception thrown trying to parse int from BodyID or SkinID for decal " + wstring(itemName.begin(), itemName.end()) + L" in: " + fpath.wstring());
+							cv->log(L"Exception thrown trying to parse int from BodyID or SkinID for decal " + stringToWstring(itemName) + L" in: " + fpath.wstring());
 						}
 					}
 					else {
@@ -1094,7 +1096,7 @@ void AlphaConsoleTextures::loadTexturesForSlot(std::shared_ptr<CVarManagerWrappe
 							this->textures[slot].emplace(itemName, AlphaConsoleTexture{ itemID, 0 });
 						}
 						catch (...) {
-							cv->log(L"Exception thrown trying to parse int from ItemID for item " + wstring(itemName.begin(), itemName.end()) + L" in: " + fpath.wstring());
+							cv->log(L"Exception thrown trying to parse int from ItemID for item " + stringToWstring(itemName) + L" in: " + fpath.wstring());
 						}
 					}
 				}

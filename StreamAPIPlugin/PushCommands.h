@@ -50,7 +50,7 @@ class PushCommands {
 public:
 	PushCommands();
 	void init(std::filesystem::path jsonPath);
-	void renderSettingsUI(std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw);
+	void renderSettingsUI(std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw, bool useWebSocket);
 	void execute(std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw, std::string query);
 
 private:

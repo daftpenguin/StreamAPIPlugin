@@ -3,10 +3,14 @@
 #include "nlohmann/json.hpp"
 #include "Ranks.h"
 #include "imgui/imgui.h"
+#include "Util.h"
 
 #include <chrono>
 #include <fstream>
 #include <unordered_set>
+#include <windows.h>
+#include <shellapi.h>
+
 #include <boost/algorithm/string.hpp>
 
 using namespace std;
@@ -215,7 +219,7 @@ void PushCommands::saveJson()
 	}
 	else {
 		json j = json{
-		{ "commands", commands }
+			{ "commands", commands }
 		};
 		file << j.dump(2) << endl;
 	}
@@ -318,29 +322,53 @@ struct SampleCommand {
 	std::string name;
 	int hideSettingsSecs;
 	PushCommand command;
+	std::map<std::string, std::string> testParams;
 };
 
 std::vector<SampleCommand> sampleCommands({
 	SampleCommand{ "Troll images for ~5 seconds", 5, PushCommand("show_image", "streamapi_show_image dickbutt.png id=img4,scale=0.3,y_offset=300; sleep 250; streamapi_show_image dickbutt.png id=img1,scale=0.5; sleep 250; streamapi_show_image dickbutt.png id=img2,scale=0.3,x_offset=-300; sleep 250; streamapi_show_image dickbutt.png id=img3,scale=0.3,x_offset=300; sleep 250; streamapi_show_image dickbutt.png id=img5,scale=0.3,y_offset=-300; sleep 2500; streamapi_hide_image img1; sleep 250; streamapi_hide_image img2; sleep 250; streamapi_hide_image img3; sleep 250; streamapi_hide_image img4; sleep 250; streamapi_hide_image img5;", true, true) },
 	SampleCommand{ "Black Screen for 2 seconds", 2, PushCommand("black_screen", "cl_rendering_disabled 1; sleep 2000; cl_rendering_disabled 0", true, true) },
 	SampleCommand{ "Hide UI for 2 seconds (boost meter and scoreboard in game)", 2, PushCommand("hide_ui", "cl_rendering_scaleform_disabled 1; sleep 2000; cl_rendering_scaleform_disabled 0", true, true) },
+	SampleCommand{ "Set item mode code", 0, PushCommand("itemmod_code", "cl_itemmod_enabled 1; cl_itemmod_code \"${code};\"", true, true), map<string, string>({{ "code", "Awo2FVyATOibGWGjDuPTZIoPy5yIgEUETTdxhyrzimMmAEDA//8/AA==" }}) },
 	});
 
 
-void PushCommands::renderSettingsUI(std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw)
+void PushCommands::renderSettingsUI(std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw, bool useWebSocket)
 {
 	if (!commandsLoaded) {
 		ImGui::TextWrapped("Commands haven't yet loaded from json file. These should load rather quickly so if you're seeing this message, check bakkesmod.log for errors.");
 	}
 	else {
-		ImGui::TextWrapped("Click add a command, give it a name, then give it a console command to run (or sequence of console commands separated by ;). Enable the command and set conditions for when the command can be run (\"other\" is any time the other conditions don't apply except \"always\").");
-		ImGui::TextWrapped("Advanced users: commands also support named placeholders like ${name} to allow command configuration to be exposed outside of the plugin. Try adding the black screen sample command, edit it, then replace \"sleep 2000\" with \"sleep ${duration}\". Test the command by putting \"duration=5000\" in the params box then click test button.");
-		ImGui::TextWrapped("Check the commands web page for instructions on how to parameterize your bot commands.");
+		ImGui::TextWrapped("This is like a library of named commands that can be activated by name through the API.");
+		ImGui::TextWrapped("Configure commands below, then expose them through your chat bot. See commands page for a tool that can help with this.");
+
+		if (ImGui::Button("Copy Commands Config##CopyActionCommands")) {
+			json j = json{
+				{ "commands", commands }
+			};
+			ImGui::SetClipboardText(j.dump().c_str());
+		}
+
+		ImGui::SameLine();
+		string commandsUrl = "https://www.daftpenguin.com/rocket-league/stream-api/commands" + string((useWebSocket ? "" : "/local"));
+		if (ImGui::Button("Open Command Setup Page (in browser)")) {
+			ShellExecute(0, 0, stringToWstring(commandsUrl).c_str(), 0, 0, SW_SHOW);
+		}
+		ImGui::SameLine();
+		ImGui::InputText("##CommandsURL", (char*)commandsUrl.c_str(), commandsUrl.size(), ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_ReadOnly);
 
 		ImGui::Separator();
 
-		ImGui::Text("SAMPLE COMMANDS:");
-		ImGui::TextWrapped("Here are a few sample commands to get you started. Click the test button to see what happens when the command is executed. Click the add button to actually add it to the set of commands that can be activated in chat.");
+		ImGui::Text("1. Add command");
+		ImGui::Text("2. Name it");
+		ImGui::TextWrapped("3. Set console command(s) to run when it's called (F6 and findcvar helps to experiment)");
+		ImGui::TextWrapped("4. Set conditions that control when the command is allowed to be executed (\"other\" is basically workshops, freeplay, main menu)");
+		ImGui::Text("5. Save command");
+		ImGui::TextWrapped("Advanced users: commands support named placeholders like ${placeholder} to allow command configuration to be exposed through API. Please only use letters, numbers, and underscores in placeholder names, and ${cmd_name} and ${cmd} are reserved. Try adding the black screen sample command, edit it, then replace \"sleep 2000\" with \"sleep ${duration}\". Test the command by putting \"duration=5000\" in the params box then click test button (sleep is in milliseconds).");
+
+		ImGui::Separator();
+
+		ImGui::Text("Sample Commands:");
 
 		for (auto& command : sampleCommands) {
 			ImGui::Text(command.name.c_str());
@@ -349,7 +377,7 @@ void PushCommands::renderSettingsUI(std::shared_ptr<CVarManagerWrapper> cv, std:
 				if (command.hideSettingsSecs > 0) {
 					cv->executeCommand("togglemenu settings; sleep " + to_string(command.hideSettingsSecs) + "000; togglemenu settings");
 				}
-				command.command.execute(cv, gw);
+				command.command.execute(cv, gw, command.testParams);
 
 			}
 			ImGui::SameLine();

@@ -50,8 +50,6 @@ const std::string CAMERA_INVERT_SWIVEL_CHANGED_EVENT = "Function TAGame.GFxData_
 const std::string CAMERA_SHAKE_CHANGED_EVENT = "Function TAGame.GFxData_Settings_TA.SetCameraShake";
 const std::string RANKS_UPDATE_EVENT = "Function TAGame.GameEvent_Soccar_TA.EventMatchWinnerSet";
 
-const unsigned int MAX_REPORT_SIZE = 50000 * 1024;
-const unsigned int REPORT_SEVERED_HEAD_SIZE = 2000 * 1024;
 constexpr auto REPORT_SERVER_URL = "https://www.daftpenguin.com";
 //constexpr auto REPORT_SERVER_URL = "http://localhost:9000";
 
@@ -151,6 +149,7 @@ private:
 private:
 	/* Push Commands */
 	void render(CanvasWrapper canvas);
+	std::string actionCommand(const httplib::Request& req, httplib::Response& res);
 
 	std::map<std::string, Image> images;
 	PushCommands pushCommands;
@@ -172,6 +171,7 @@ private:
 	void RenderSettings();
 	void RenderGeneralSettings();
 	void RenderPushCommands();
+	void RenderConsoleCommands();
 	void RenderReportSubmission();
 	std::string GetPluginName();
 	void SetImGuiContext(uintptr_t ctx);

@@ -1,5 +1,7 @@
 #include "StreamAPIPlugin.h"
 
+#include "Util.h"
+
 #include <fstream>
 #include <cstdlib>
 #include <iostream>
@@ -8,6 +10,7 @@
 
 #include <boost/thread.hpp>
 #include <boost/algorithm/string.hpp>
+#include <boost/locale/conversion.hpp>
 
 using namespace std;
 namespace fs = std::filesystem;
@@ -252,29 +255,37 @@ void StreamAPIPlugin::onLoad()
 			img.image->LoadForCanvas();
 			images.emplace(imageId, img);
 		}		
-		}, "shows image on screen (PNG only), params= <img_path> " \
+		}, "shows image on screen (PNG only), params: <img_path> " \
 			"<optional id=img_id,scale=float/number,x=integer,y=integer,offset_x=integer,offset_y=integer> (img_id cannot contain spaces, commas, or = signs)",
 			PERMISSION_ALL);
 
 	cvarManager->registerNotifier("streamapi_hide_image", [this](vector<string> params) {
-		string imageId = "dickbutt.png";
-		if (params.size() > 1)
-			imageId = params[1];
+		if (params.size() > 1) {
+			std::string imageId = params[1];
 
-		auto it = images.find(imageId);
-		if (it != images.end()) {
-			it->second.show = false;
-			return;
+			auto it = images.find(imageId);
+			if (it != images.end()) {
+				it->second.show = false;
+				return;
+			}
+
+			it = images.find((gameWrapper->GetDataFolder() / "streamapi" / imageId).string());
+			if (it != images.end()) {
+				it->second.show = false;
+			}
+			else {
+				cvarManager->log("Failed to find image with id: " + imageId + ". Cannot hide image.");
+			}
+		}
+		else {
+			// Hide all images
+			for (auto it = images.begin(); it != images.end(); ++it) {
+				it->second.show = false;
+			}
 		}
 
-		it = images.find((gameWrapper->GetDataFolder() / "streamapi" / imageId).string());
-		if (it != images.end()) {
-			it->second.show = false;
-			return;
-		}
-
-		cvarManager->log("Failed to find image with id: " + imageId + ". Cannot hide image.");
-		}, "hides image shown by streamapi_show_image, params= <img_id> (image path if no img_id specified to show command)", PERMISSION_ALL);
+		}, "hides image shown by streamapi_show_image, params: <img_id>. if no img_id given, all images are hidden. img_id is path to image, if no img_id given to streamapi_show_image.",
+		PERMISSION_ALL);
 
 	cvarManager->registerNotifier("streamapi_run_cmd", [this](vector<string> params) {
 		if (params.size() < 2) {
@@ -811,6 +822,11 @@ void StreamAPIPlugin::configureHttpServer()
 		string args;
 		if (req.has_param("cmd")) {
 			cmd = req.get_param_value("cmd");
+			if (cmd.compare("action") == 0) {
+				actionCommand(req, res);
+				return;
+			}
+
 			if (req.has_param("args")) {
 				args = req.get_param_value("args");
 			}
@@ -899,32 +915,17 @@ void StreamAPIPlugin::SubmitReportThread(std::string reportDetails, bool submitt
 	if (submittedFromUI) guiReportStatus = "";
 
 	cvarManager->log("Reading bakkesmod.log");
-	char* buf = (char*)malloc(MAX_REPORT_SIZE);
-	if (!buf) {
-		if (submittedFromUI) guiReportStatus = "Failed to allocate buffer for report. Aborting report submission.";
-		cvarManager->log("Failed to allocate buffer for report. Aborting report submission.");
-		return;
-	}
-
-	size_t bufWritten = 0;
-	size_t written;
-	int errno;
-
-	// Write token to buf
-	cvarManager->log("Writing token to buffer");
-	written = snprintf(&buf[bufWritten], MAX_REPORT_SIZE - bufWritten, "Token: %s\n\n", webSocket.getToken().c_str());
-	bufWritten += min(written, MAX_REPORT_SIZE - 1 - bufWritten);
-
-	// Write user info to buf
-	cvarManager->log("Writing name and UID to buffer");
-	written = snprintf(&buf[bufWritten], MAX_REPORT_SIZE - bufWritten, "User: %s (%s)\nBMVersion: %d\nPlugin: %s\nIsSteamVersion: %d\n\n",
-		playerName.c_str(), playerId.c_str(), gameWrapper->GetBakkesModVersion(), plugin_version, gameWrapper->IsUsingSteamVersion());
-	bufWritten += min(written, MAX_REPORT_SIZE - 1 - bufWritten);
+	stringstream oss;
+	oss << "Token: " << webSocket.getToken() << endl << endl
+		<< "PlayerName: " << playerName << endl
+		<< "PlayerID: " << playerId << endl
+		<< "BMVersion: " << gameWrapper->GetBakkesModVersion() << endl
+		<< "Plugin: " << plugin_version << endl
+		<< "IsSteam: " << gameWrapper->IsUsingSteamVersion() << endl << endl;
 
 	// Write report to buf
 	if (!reportDetails.empty()) {
-		written = snprintf(&buf[bufWritten], MAX_REPORT_SIZE - bufWritten, "Report:\n%s\n\n", reportDetails.c_str());
-		bufWritten += min(written, MAX_REPORT_SIZE - 1 - bufWritten);
+		oss << "Report: " << reportDetails << endl;
 	}
 
 	// Read bakkesmod.log into buf
@@ -940,27 +941,12 @@ void StreamAPIPlugin::SubmitReportThread(std::string reportDetails, bool submitt
 		}
 	}
 	else {
-		fin.seekg(0, std::ios::end);
-		streampos fsize = fin.tellg();
-		fin.seekg(0);
-
-		bool severeHead = fsize > MAX_REPORT_SIZE - bufWritten;
-		if (severeHead) {
-			fin.read(&buf[bufWritten], min(REPORT_SEVERED_HEAD_SIZE, MAX_REPORT_SIZE - 1 - bufWritten));
-			bufWritten += fin.gcount();
-			snprintf(&buf[bufWritten], MAX_REPORT_SIZE - bufWritten, "\n...\n");
-			fin.seekg(fsize);
-			fin.seekg(-1 * (MAX_REPORT_SIZE - 1 - bufWritten));
-		}
-
-		fin.read(&buf[bufWritten], MAX_REPORT_SIZE - 1 - bufWritten);
-		bufWritten += fin.gcount();
-		buf[bufWritten] = 0;
+		oss << fin.rdbuf();
 	}
 
 	cvarManager->log("Submitting report");
 	httplib::MultipartFormDataItems items = {
-		{ "report", buf, "report.txt", "text/plain" }
+		{ "report", oss.str(), "report.txt", "text/plain" }
 	};
 
 	httplib::Client cli(REPORT_SERVER_URL);
@@ -984,8 +970,21 @@ void StreamAPIPlugin::SubmitReportThread(std::string reportDetails, bool submitt
 	catch (exception e) {
 		cvarManager->log("Failed to connect to server: " + string(e.what()));
 	}
+}
 
-	free(buf);
+std::string StreamAPIPlugin::actionCommand(const httplib::Request& req, httplib::Response& res)
+{
+	stringstream paramsSS;
+	for (auto it = req.params.begin(); it != req.params.end(); ++it) {
+		if (it->first.compare("cmd") == 0) continue;
+		paramsSS << it->first;
+		if (!it->second.empty()) {
+			paramsSS << "=" << it->second;
+		}
+		paramsSS << "&";
+	}
+	string params = paramsSS.str();
+	cvarManager->executeCommand("sleep 0; streamapi_run_cmd " + params.substr(0, params.size() - 1) + ";");
 }
 
 void StreamAPIPlugin::render(CanvasWrapper canvas) {

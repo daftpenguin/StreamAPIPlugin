@@ -315,10 +315,10 @@ void WebSocket::on_message(websocketpp::connection_hdl, client::message_ptr msg)
 			cv.notify_one();
 		}
 		else {
-			if (payload.rfind("console ", 0) == 0) { // startsWith
+			if (payload.rfind("action: ", 0) == 0) { // startsWith
 				string cmd = payload.substr(8);
-				_globalCvarManager->log("WebSocket: received pushed console command: " + cmd);
-				_globalCvarManager->executeCommand("sleep 1; " + cmd);
+				_globalCvarManager->log("WebSocket: received action command: " + cmd);
+				_globalCvarManager->executeCommand("sleep 1; streamapi_run_cmd " + cmd);
 			}
 			else {
 				reason = payload;
