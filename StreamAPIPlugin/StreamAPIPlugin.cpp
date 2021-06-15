@@ -144,7 +144,9 @@ void StreamAPIPlugin::onLoad()
 		webSocket.setData("rank", ranks.toString("json", cvarManager));
 		}, 10.0f);
 
-	gameWrapper->HookEventPost(LOADOUT_CHANGED_EVENT, [this](string eventName) { getLoadout(); });
+	for (const auto& evt : LOADOUT_CHANGED_EVENTS) {
+		gameWrapper->HookEventPost(evt, [this](string eventName) { getLoadout(); });
+	}
 	gameWrapper->HookEventPost(SENS_CHANGED_EVENT, [this](string eventName) { getSens(); });
 	gameWrapper->HookEventPost(CAMERA_CHANGED_EVENT, [this](string eventName) { getCamera(); });
 	gameWrapper->HookEventPost(BINDINGS_CHANGED_EVENT, [this](string eventName) { getBindings(); });
@@ -328,7 +330,28 @@ void StreamAPIPlugin::getLoadout()
 		auto car = gameWrapper->GetLocalCar();
 		if (!car.IsNull()) {
 			teamNum = car.GetTeamNum2();
+			cvarManager->log("GOT TEAM NUM");
 		}
+		else {
+			cvarManager->log("CAR IS NULL");
+			auto server = gameWrapper->GetCurrentGameState();
+			if (!server.IsNull()) {
+				auto players = server.GetLocalPlayers();
+				if (players.Count() > 0) {
+					teamNum = players.Get(0).GetTeamNum2();
+					cvarManager->log("GOT TEAM NUM FROM PLAYERS");
+				}
+				else {
+					cvarManager->log("0 LOCAL PLAYERS");
+				}
+			}
+			else {
+				cvarManager->log("SERVER IS NULL");
+			}
+		}
+	}
+	else {
+		cvarManager->log("NOT IN GAME");
 	}
 
 	string loadoutStr = this->loadout.toString();
@@ -903,7 +926,7 @@ void StreamAPIPlugin::SubmitReport(std::string reportDetails, bool submittedFrom
 {
 	gameWrapper->Execute(
 		[this, reportDetails, submittedFromUI](GameWrapper* gw) {
-			// Dump data to log before sending log (might not be included in report if exceeds MAX_REPORT_SIZE)
+			// Dump data to log before sending log
 			cvarManager->log("Dumping data to log before submitting report");
 			onDump(vector<string>{"streamapi_dump", "stale"});
 			onDump(vector<string>{"streamapi_dump"});
@@ -943,6 +966,10 @@ void StreamAPIPlugin::SubmitReportThread(std::string reportDetails, bool submitt
 	else {
 		oss << fin.rdbuf();
 	}
+	oss << endl << endl;
+
+	auto j = pushCommands.toJson();
+	oss << j.dump(2) << endl << endl;
 
 	cvarManager->log("Submitting report");
 	httplib::MultipartFormDataItems items = {

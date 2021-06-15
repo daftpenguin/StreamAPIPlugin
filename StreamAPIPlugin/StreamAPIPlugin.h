@@ -29,7 +29,11 @@ constexpr auto plugin_version = stringify(VERSION_MAJOR) "." stringify(VERSION_M
 
 const std::string PREVIEW_TEAMNUM_CHANGED_EVENT = "Function TAGame.CarPreviewActor_TA.SetTeamIndex";
 
-const std::string LOADOUT_CHANGED_EVENT = "Function TAGame.CarMeshComponent_TA.SetLoadout";
+const std::string LOADOUT_CHANGED_EVENTS[] = {
+	"Function TAGame.CarMeshComponent_TA.SetLoadout",
+	"Function TAGame.Car_TA.SetLoadout"
+};
+
 const std::string SENS_CHANGED_EVENT = "Function TAGame.GFxData_Controls_TA.HandleActiveBindingsChanged";
 const std::string CAMERA_CHANGED_EVENT = "Function TAGame.GFxData_Settings_TA.OnCameraOptionChanged";
 const std::string BINDINGS_CHANGED_EVENT = "Function TAGame.PlayerInput_Menu_TA.OnActiveBindingsChanged";

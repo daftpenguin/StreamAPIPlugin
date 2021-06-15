@@ -2,6 +2,7 @@
 #define WIN32_LEAN_AND_MEAN
 
 #include "bakkesmod/plugin/bakkesmodplugin.h"
+#include "nlohmann/json.hpp"
 
 #include <string>
 #include <vector>
@@ -52,6 +53,7 @@ public:
 	void init(std::filesystem::path jsonPath);
 	void renderSettingsUI(std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw, bool useWebSocket);
 	void execute(std::shared_ptr<CVarManagerWrapper> cv, std::shared_ptr<GameWrapper> gw, std::string query);
+	nlohmann::json toJson();
 
 private:
 	void loadJson();

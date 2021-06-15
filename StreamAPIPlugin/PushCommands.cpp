@@ -1,6 +1,5 @@
 #include "PushCommands.h"
 #include "StreamAPIPlugin.h"
-#include "nlohmann/json.hpp"
 #include "Ranks.h"
 #include "imgui/imgui.h"
 #include "Util.h"
@@ -314,6 +313,11 @@ void PushCommands::execute(std::shared_ptr<CVarManagerWrapper> cv, std::shared_p
 	}
 
 	it->second.execute(cv, gw, params);
+}
+
+nlohmann::json PushCommands::toJson()
+{
+	return json(commands);
 }
 
 /* GUI Related Methods */
